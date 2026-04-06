@@ -1,0 +1,56 @@
+[general]
+default_providers = ["claude"]
+poll_interval = 600
+notification_enabled = false
+
+[thresholds]
+warning = 70
+critical = 90
+
+[notifications]
+on_warning = true
+on_critical = true
+on_reset = true
+sound = false
+
+[daemon]
+log_file = ""
+pid_file = ""
+
+[providers.claude]
+enabled = true
+credentials_path = ""
+show_opus = true
+
+[providers.grok]
+enabled = false
+key_env = "XAI_API_KEY"
+
+[providers.openai]
+enabled = false
+key_env = "OPENAI_API_KEY"
+
+[providers.ollama]
+enabled = false
+poll_interval = 60
+host = "http://localhost:11434"
+
+[providers.local]
+enabled = false
+poll_interval = 60
+show_gpu = true
+show_cpu = true
+show_ram = true
+gpu_backend = "auto"
+
+[history]
+enabled = true
+retention_days = 90
+
+[monitor]
+compact = false
+show_sparkline = true
+
+[ux]
+autostart = false
+start_minimised = true
