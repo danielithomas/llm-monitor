@@ -80,11 +80,26 @@ uv tool install llm-monitor
 
 # Via pip
 pip install llm-monitor --user
+```
 
-# From source
-git clone https://github.com/<user>/llm-monitor.git
+### Running from Source
+
+```bash
+git clone https://github.com/danielithomas/llm-monitor.git
 cd llm-monitor
 uv sync --group dev
+
+# Run directly
+uv run llm-monitor
+uv run llm-monitor --now
+uv run llm-monitor history stats
+
+# Run tests
+uv run pytest
+uv run pytest tests/test_history.py -v    # single test file
+
+# Build a wheel
+uv build
 ```
 
 ## Prerequisites
@@ -245,11 +260,12 @@ llm-monitor | jq '.providers[].windows[] | {name, utilisation, status}'
 
 ## Development
 
+See [Running from Source](#running-from-source) for setup. Additional commands:
+
 ```bash
-git clone https://github.com/<user>/llm-monitor.git
-cd llm-monitor
-uv sync --group dev
-uv run pytest -v
+uv run pytest -v                          # verbose test output
+uv run pytest tests/test_security.py      # single file
+uv run pytest -k "test_purge"             # run tests matching pattern
 ```
 
 ## Licence
