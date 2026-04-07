@@ -112,7 +112,8 @@ class TestHelp:
         runner = CliRunner()
         result = runner.invoke(cli, ["-h"])
         assert result.exit_code == 0
-        assert "--now" in result.output
+        assert "status" in result.output
+        assert "history" in result.output
 
 
 # ---------------------------------------------------------------------------
@@ -575,13 +576,23 @@ class TestFetchAll:
 
 
 class TestNoHistory:
+    @respx.mock
     def test_no_history_accepted(self, tmp_path, monkeypatch):
         """--no-history is accepted without error."""
         _setup_env(tmp_path, monkeypatch)
+        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
         runner = CliRunner()
-        # Just check it doesn't fail — it's a no-op
-        result = runner.invoke(cli, ["--no-history", "--version"])
+        result = runner.invoke(
+            cli, ["--no-history", "--provider", "claude", "--fresh"]
+        )
         assert result.exit_code == 0
+        # History DB should NOT exist
+        assert not (tmp_path / "data" / "history.db").exists()
 
 
 # ---------------------------------------------------------------------------

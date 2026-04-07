@@ -1273,13 +1273,66 @@ History Database: ~/.local/share/llm-monitor/history.db
 
 #### `llm-monitor history export`
 
-Full raw export of the database for backup or migration.
+Full raw export of the database for backup or migration. Export always includes all data — no `--models` or `--provider` filtering (that's what `--report` is for). Export is a full dump for backup and migration.
 
 ```bash
 llm-monitor history export --format sql > backup.sql
 llm-monitor history export --format jsonl > backup.jsonl
 llm-monitor history export --format csv > backup.csv
 ```
+
+**Export formats and column structure:**
+
+**SQL** — Valid `INSERT INTO` statements, one per row. Produces a standalone script that can recreate the data in any SQLite database with the same schema. Includes `CREATE TABLE IF NOT EXISTS` preamble.
+
+**CSV** — Two logical sections separated by a blank line, each with its own header row. The first section is `usage_samples`, the second is `model_usage`. `provider_extras` rows are omitted from CSV (the JSON blob doesn't map well to flat columns). NULL values are rendered as empty strings.
+
+`usage_samples` columns:
+```
+id,provider,timestamp,window_name,utilisation,status,unit,raw_value,raw_limit,resets_at,cached
+```
+
+`model_usage` columns:
+```
+id,provider,timestamp,model,input_tokens,output_tokens,total_tokens,cost,request_count,period
+```
+
+**JSONL** — One JSON object per line. Each line includes a `"type"` discriminator field to distinguish record types. All three tables are included. NULL values are rendered as JSON `null`. Timestamps in ISO 8601 UTC.
+
+```jsonl
+{"type":"usage_sample","id":1,"provider":"claude","timestamp":"2026-04-01T10:00:00Z","window_name":"Session (5h)","utilisation":42.3,"status":"normal","unit":"percent","raw_value":null,"raw_limit":null,"resets_at":"2026-04-01T15:00:00Z","cached":false}
+{"type":"model_usage","id":1,"provider":"claude","timestamp":"2026-04-01T10:00:00Z","model":"claude-opus-4-6","input_tokens":15000,"output_tokens":8000,"total_tokens":23000,"cost":null,"request_count":12,"period":"5h"}
+{"type":"provider_extras","id":1,"provider":"claude","timestamp":"2026-04-01T10:00:00Z","extras":{"plan":"Pro","token_expires_at":"2026-04-01T12:00:00Z"}}
+```
+
+### 6.8 Report Aggregation Algorithms
+
+When `--granularity` is `hourly` or `daily`, multiple raw samples within a time bucket are aggregated. Different fields have different semantics and require different algorithms.
+
+**Key insight:** The `raw_value` and token count fields in this system are **running totals** within a provider window (e.g., "tokens used this week so far"), not per-interval deltas. Aggregation must account for this — summing running totals would double-count.
+
+| Field | Algorithm | Rationale |
+|-------|-----------|-----------|
+| `utilisation` | **mean** | Average usage over the bucket gives the truest picture of sustained load. |
+| `status` | **max severity** (`exceeded` > `critical` > `warning` > `normal`) | A bucket that hit `exceeded` even once should surface that — worst-case is what matters for alerting and review. |
+| `raw_value` | **last** (most recent sample in bucket) | Running total within a window; the last sample is the most current reading. |
+| `raw_limit` | **last** | Limits rarely change mid-bucket; the latest value is authoritative. |
+| `resets_at` | **last** | The most recent reset timestamp is the relevant one. |
+| `input_tokens` | **max** | Running total within a window — max captures the high-water mark, not a per-interval delta. |
+| `output_tokens` | **max** | Same as `input_tokens`. |
+| `total_tokens` | **max** | Same as `input_tokens`. |
+| `cost` | **max** | Cumulative within a window, not incremental. |
+| `request_count` | **max** | Same reasoning as tokens. |
+
+**Metadata included in aggregated output:**
+- `sample_count`: number of raw samples in the bucket (data density indicator)
+- `bucket_start` / `bucket_end`: ISO 8601 timestamps for the aggregation window
+
+**Bucket boundaries:**
+- **Hourly:** aligned to clock hours in UTC (e.g., `10:00:00Z` to `10:59:59Z`)
+- **Daily:** aligned to calendar days in UTC (e.g., `2026-04-01T00:00:00Z` to `2026-04-01T23:59:59Z`)
+
+**Delta-based analysis** (e.g., "tokens consumed per hour") is a derived calculation on top of aggregated data. This is deferred to v1.x and not part of the v0.2.0 aggregation engine.
 
 ---
 
@@ -1786,7 +1839,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | OQ-019 | **Should the `--insecure` flag be visible in `--help`?** Making it prominent encourages misuse. Alternatively, document it only in the man page and hide from `--help`. | Low | CLI UX | **Closed (D-018):** Permission checks are now warnings, not hard failures. The `--insecure` flag is no longer needed; `--quiet` suppresses the warning. |
 | OQ-020 | **Should history support downsampling for long-term storage?** Keep 5-minute samples for 7 days, hourly averages for 90 days, daily averages for 1 year. Reduces disk usage for long retention but adds schema and query complexity. Could be a v1.x feature. | Low | History | Open |
 | OQ-021 | **Should `--report` support chart output to terminal?** Rich can render basic bar charts. Alternatively, export to an HTML file with embedded charts. The sparkline in `--monitor` covers the basic case; full charts may be GTK v2 territory. | Low | History/Output | Open |
-| OQ-022 | **Should per-model breakdown be available as a `--report --models` flag or a separate `llm-monitor models` subcommand?** The flag approach keeps reporting unified; a subcommand could offer richer model-specific analysis (cost per model per day, model switching patterns). | Low | History/Models | Open |
+| OQ-022 | **Should per-model breakdown be available as a `--report --models` flag or a separate `llm-monitor models` subcommand?** The flag approach keeps reporting unified; a subcommand could offer richer model-specific analysis (cost per model per day, model switching patterns). | Low | History/Models | **Closed (D-043):** `--report --models` flag. Keeps reporting unified; a dedicated subcommand can be added later if richer model analysis is needed. |
 | OQ-023 | **Should the daemon expose a health endpoint?** A simple HTTP endpoint (e.g., `localhost:9847/health`) would enable container health checks (`HEALTHCHECK` in Dockerfile) and monitoring by external tools. Adds a dependency (or use stdlib `http.server`). Alternative: health via `daemon status` exit code only. | Medium | Daemon/Docker | Open |
 | OQ-024 | **Claude credentials in Docker: mount file or extract token to env var?** Mounting `~/.claude/.credentials.json:ro` is simpler but ties the container to a host path and Claude Code's file format. Extracting the OAuth token to an env var is more portable but requires manual refresh. | Medium | Docker/Claude | Open |
 | OQ-025 | **Should the Docker image be published to Docker Hub, GHCR, or both?** GHCR is free for public repos and integrates with GitHub Actions. Docker Hub has broader discoverability. | Low | Docker | Open |
@@ -1863,6 +1916,8 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-040 | **`SecretStr.__repr__` never reveals any real characters.** | The previous design leaked the first 6 characters. For tokens with standard prefixes this is low-value, but it sets a bad precedent. `__repr__` now always returns `SecretStr('***')`. | 2026-04-06 | Accepted |
 | D-041 | **Exponential backoff on rate-limit (429) responses.** | Claude's 429s can persist for 30+ minutes. Without backoff state, the tool retries on every poll cycle and gets re-rate-limited. Backoff escalates exponentially (10m → 20m → 40m, cap 60m), is persisted in the cache file, and resets on success. | 2026-04-06 | Accepted |
 | D-042 | **Environment variable overrides for all XDG paths.** | `LLM_MONITOR_CONFIG`, `LLM_MONITOR_DATA_DIR`, `LLM_MONITOR_CACHE_DIR` override defaults. Essential for Docker (where XDG dirs may not exist) and for CI/test environments. | 2026-04-06 | Accepted |
+| D-043 | **Report aggregation: mean(utilisation), max-severity(status), last(counters), max(tokens/cost).** | Fields have different semantics: utilisation is a gauge (mean is correct), status is a severity level (worst-case matters), raw_value/raw_limit/resets_at are point-in-time state (last is authoritative), tokens/cost are running totals within a provider window (max captures the high-water mark without double-counting). Delta-based analysis deferred to v1.x. | 2026-04-07 | Accepted |
+| D-044 | **Export uses two logical record types with `type` discriminator.** | `usage_samples` and `model_usage` have different cardinality and schemas. Merging into one row with NULLs everywhere is messy. JSONL uses a `type` field per line (`usage_sample`, `model_usage`, `provider_extras`). CSV uses two sections with separate header rows (extras omitted — JSON blobs don't map to flat columns). SQL includes all tables. Export is always a complete dump with no filtering flags. | 2026-04-07 | Accepted |
 
 ---
 
