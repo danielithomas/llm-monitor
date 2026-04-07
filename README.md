@@ -80,11 +80,26 @@ uv tool install llm-monitor
 
 # Via pip
 pip install llm-monitor --user
+```
 
-# From source
-git clone https://github.com/<user>/llm-monitor.git
+### Running from Source
+
+```bash
+git clone https://github.com/danielithomas/llm-monitor.git
 cd llm-monitor
 uv sync --group dev
+
+# Run directly
+uv run llm-monitor
+uv run llm-monitor --now
+uv run llm-monitor history stats
+
+# Run tests
+uv run pytest
+uv run pytest tests/test_history.py -v    # single test file
+
+# Build a wheel
+uv build
 ```
 
 ## Prerequisites
@@ -114,6 +129,10 @@ critical = 90
 enabled = true
 credentials_path = ""            # empty = default (~/.claude/.credentials.json)
 show_opus = true
+
+[history]
+enabled = true
+retention_days = 90
 ```
 
 Override paths via environment variables:
@@ -148,6 +167,8 @@ Credentials are **never stored in the config file**. Resolution order:
 | `--list-providers` | | Show available providers |
 | `--no-colour` | | Disable colour output |
 | `--colour=always` | | Force colour even when piped |
+| `--no-history` | | Disable history recording for this invocation |
+| `--report` | | Display usage report (alias for `history report`) |
 | `--help` | `-h` | Show help |
 
 ## Exit Codes
@@ -159,6 +180,59 @@ Credentials are **never stored in the config file**. Resolution order:
 | 2 | Authentication error |
 | 3 | Partial success (some providers failed) |
 | 4 | All providers unreachable |
+
+## History and Reporting
+
+Usage data is recorded to a local SQLite database on every fetch where data changes meaningfully. This enables trend analysis and historical reporting.
+
+**Data location:** `~/.local/share/llm-monitor/history.db`
+
+### Configuration
+
+```toml
+[history]
+enabled = true           # Set to false to disable history collection
+retention_days = 90      # How long to keep history (default: 90 days)
+```
+
+Use `--no-history` to skip recording for a single invocation.
+
+### Reports
+
+```bash
+# Table summary of last 7 days
+llm-monitor --report
+
+# JSON report for the last 30 days, Claude only
+llm-monitor --report --days 30 --provider claude --format json
+
+# CSV report with daily granularity
+llm-monitor --report --days 14 --format csv --granularity daily
+
+# Include per-model token breakdown
+llm-monitor history report --days 7 --models
+
+# Hourly granularity
+llm-monitor history report --granularity hourly --days 3
+```
+
+**Report flags:** `--days`, `--from`, `--to`, `--format` (table/json/csv), `--granularity` (raw/hourly/daily), `--provider`, `--window`, `--models`
+
+### History Commands
+
+```bash
+# Database summary
+llm-monitor history stats
+
+# Export for backup
+llm-monitor history export --format jsonl > backup.jsonl
+llm-monitor history export --format csv > backup.csv
+llm-monitor history export --format sql > backup.sql
+
+# Purge all history (requires confirmation)
+llm-monitor history purge
+llm-monitor history purge --confirm   # non-interactive
+```
 
 ## Scripting Examples
 
@@ -186,11 +260,12 @@ llm-monitor | jq '.providers[].windows[] | {name, utilisation, status}'
 
 ## Development
 
+See [Running from Source](#running-from-source) for setup. Additional commands:
+
 ```bash
-git clone https://github.com/<user>/llm-monitor.git
-cd llm-monitor
-uv sync --group dev
-uv run pytest -v
+uv run pytest -v                          # verbose test output
+uv run pytest tests/test_security.py      # single file
+uv run pytest -k "test_purge"             # run tests matching pattern
 ```
 
 ## Licence

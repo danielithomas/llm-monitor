@@ -9,6 +9,7 @@ from __future__ import annotations
 import asyncio
 import os
 import sys
+from datetime import datetime, timedelta, timezone
 
 import click
 
@@ -18,6 +19,7 @@ from llm_monitor.config import get_cache_dir, load_config
 from llm_monitor.core import determine_exit_code, fetch_all
 from llm_monitor.formatters.json_fmt import format_json
 from llm_monitor.formatters.table_fmt import format_table
+from llm_monitor.history import HistoryStore
 from llm_monitor.providers import PROVIDERS, get_enabled_providers
 
 
@@ -47,7 +49,82 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
     return False
 
 
-@click.command(context_settings={"help_option_names": ["-h", "--help"]})
+def _open_history(config: dict, no_history: bool) -> HistoryStore | None:
+    """Open a HistoryStore if history is enabled, otherwise return None."""
+    if no_history:
+        return None
+    if not config.get("history", {}).get("enabled", True):
+        return None
+    store = HistoryStore()
+    store.open()
+    retention = config.get("history", {}).get("retention_days", 90)
+    store.prune(retention)
+    return store
+
+
+def _format_size(size_bytes: int) -> str:
+    """Format bytes as human-readable size."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 * 1024:
+        return f"{size_bytes / 1024:.1f} KB"
+    else:
+        return f"{size_bytes / (1024 * 1024):.1f} MB"
+
+
+def _stdin_is_tty() -> bool:
+    """Check if stdin is a TTY. Extracted for testability."""
+    return sys.stdin.isatty()
+
+
+def _load_config_or_exit(config_path: str | None = None) -> dict:
+    """Load config or exit with error."""
+    try:
+        return load_config(config_path)
+    except ValueError as exc:
+        click.echo(
+            f"Error: {exc}\n"
+            "Fix: Check your config file syntax (TOML format).",
+            err=True,
+        )
+        sys.exit(1)
+
+
+# ======================================================================
+# Main CLI group with default-to-status behaviour
+# ======================================================================
+
+
+class _MainGroup(click.Group):
+    """Group that delegates unknown subcommands and bare flags to 'status'."""
+
+    def parse_args(self, ctx: click.Context, args: list[str]) -> list[str]:
+        # If no args or first arg is a flag (not a known subcommand),
+        # inject 'status' so the main fetch path runs by default.
+        if not args or (args[0].startswith("-") and args[0] not in ("-h", "--help", "-V", "--version")):
+            args = ["status"] + list(args)
+        elif args[0] not in self.commands and args[0] not in ("-h", "--help", "-V", "--version"):
+            # Unknown positional — insert 'status' and let it handle the error
+            args = ["status"] + list(args)
+        return super().parse_args(ctx, args)
+
+
+@click.group(cls=_MainGroup, context_settings={"help_option_names": ["-h", "--help"]},
+             invoke_without_command=True)
+@click.option("--version", "-V", is_flag=True, default=False, help="Print version and exit.")
+@click.pass_context
+def cli(ctx: click.Context, version: bool) -> None:
+    """Monitor LLM service usage across providers."""
+    if version:
+        click.echo(f"llm-monitor {llm_monitor.__version__}")
+        ctx.exit(0)
+
+
+# ======================================================================
+# status — default command (fetch and display)
+# ======================================================================
+
+@cli.command()
 @click.option("--now", is_flag=True, default=False, help="Display table output.")
 @click.option(
     "--provider", "-p", default=None,
@@ -56,10 +133,6 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
 @click.option("--fresh", "-f", is_flag=True, default=False, help="Bypass cache.")
 @click.option("--verbose", "-v", is_flag=True, default=False, help="Verbose logging to stderr.")
 @click.option("--quiet", "-q", is_flag=True, default=False, help="Suppress non-error stderr output.")
-@click.option(
-    "--version", "-V", is_flag=True, default=False,
-    help="Print version and exit.",
-)
 @click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
 @click.option("--clear-cache", is_flag=True, default=False, help="Delete cache and exit.")
 @click.option("--list-providers", is_flag=True, default=False, help="List providers and exit.")
@@ -70,28 +143,52 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
 )
 @click.option(
     "--no-history", is_flag=True, default=False,
-    help="Disable history recording (placeholder for v0.2.0).",
+    help="Disable history recording for this invocation.",
 )
-def cli(
+@click.option(
+    "--report", is_flag=True, default=False,
+    help="Display usage report from history. Alias for 'history report'.",
+)
+@click.option("--days", default=None, type=int, help="Report: number of days.")
+@click.option("--from", "from_date", default=None, help="Report: start date (YYYY-MM-DD).")
+@click.option("--to", "to_date", default=None, help="Report: end date (YYYY-MM-DD).")
+@click.option(
+    "--format", "output_format", default=None,
+    type=click.Choice(["json", "table", "csv"]),
+    help="Report: output format.",
+)
+@click.option(
+    "--granularity", default=None,
+    type=click.Choice(["raw", "hourly", "daily"]),
+    help="Report: aggregation granularity.",
+)
+@click.option("--models", is_flag=True, default=False, help="Report: include per-model breakdown.")
+@click.option(
+    "--window", "window_filter", default=None,
+    help="Report: filter to specific window name.",
+)
+def status(
     now: bool,
     provider: str | None,
     fresh: bool,
     verbose: bool,
     quiet: bool,
-    version: bool,
     config_path: str | None,
     clear_cache: bool,
     list_providers: bool,
     no_colour: bool,
     colour: str | None,
     no_history: bool,
+    report: bool,
+    days: int | None,
+    from_date: str | None,
+    to_date: str | None,
+    output_format: str | None,
+    granularity: str | None,
+    models: bool,
+    window_filter: str | None,
 ) -> None:
-    """Monitor LLM service usage across providers."""
-    # --version
-    if version:
-        click.echo(f"llm-monitor {llm_monitor.__version__}")
-        return
-
+    """Fetch and display current LLM usage (default command)."""
     # Mutual exclusivity: --quiet and --verbose
     if quiet and verbose:
         click.echo(
@@ -112,6 +209,23 @@ def cli(
         )
         sys.exit(1)
 
+    # If --report, delegate to report logic
+    if report:
+        _run_report(
+            config=config,
+            provider_filter=provider,
+            days=days,
+            from_date=from_date,
+            to_date=to_date,
+            output_format=output_format or "table",
+            granularity=granularity or "daily",
+            include_models=models,
+            window_filter=window_filter,
+            no_colour=no_colour,
+            colour=colour,
+        )
+        return
+
     cache_dir = get_cache_dir()
     cache = ProviderCache(cache_dir)
 
@@ -128,7 +242,6 @@ def cli(
             section = providers_cfg.get(name, {})
             enabled = section.get("enabled", True)
             enabled_str = "enabled" if enabled else "disabled"
-            # Check if configured by instantiating
             try:
                 instance = cls(config)
                 configured = instance.is_configured()
@@ -182,6 +295,15 @@ def cli(
     # Fetch usage
     statuses = asyncio.run(fetch_all(provider_instances, cache, config, fresh=fresh))
 
+    # Record to history
+    history = _open_history(config, no_history)
+    if history is not None:
+        try:
+            for s in statuses:
+                history.record(s)
+        finally:
+            history.close()
+
     # Determine colour
     use_colour = _resolve_colour(no_colour, colour)
 
@@ -197,3 +319,396 @@ def cli(
     exit_code = determine_exit_code(statuses)
     if exit_code != 0:
         sys.exit(exit_code)
+
+
+# ======================================================================
+# history subcommand group
+# ======================================================================
+
+@cli.group()
+def history() -> None:
+    """History database commands (stats, purge, export, report)."""
+
+
+@history.command(name="stats")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def history_stats(config_path: str | None) -> None:
+    """Display history database summary."""
+    config = _load_config_or_exit(config_path)
+    store = HistoryStore()
+    store.open()
+    try:
+        info = store.stats()
+        retention = config.get("history", {}).get("retention_days", 90)
+        prune_count = store.prune_count(retention)
+
+        providers_str = ", ".join(info["providers"]) if info["providers"] else "none"
+        click.echo(f"History Database: {info['db_path']}")
+        click.echo(f"  Size:       {_format_size(info['db_size'])}")
+        click.echo(f"  Samples:    {info['sample_count']:,}")
+        click.echo(f"  Models:     {info['model_count']:,}")
+        click.echo(f"  Providers:  {providers_str}")
+        click.echo(f"  Oldest:     {info['oldest'] or 'n/a'}")
+        click.echo(f"  Newest:     {info['newest'] or 'n/a'}")
+        click.echo(
+            f"  Retention:  {retention} days "
+            f"(next prune removes {prune_count:,} records)"
+        )
+    finally:
+        store.close()
+
+
+@history.command(name="purge")
+@click.option("--confirm", is_flag=True, default=False, help="Skip interactive confirmation.")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def history_purge(confirm: bool, config_path: str | None) -> None:
+    """Permanently delete all history data."""
+    _load_config_or_exit(config_path)
+    store = HistoryStore()
+    store.open()
+    try:
+        info = store.stats()
+
+        if not confirm:
+            # Check if stdin is a TTY
+            if not _stdin_is_tty():
+                click.echo(
+                    "Error: history purge requires interactive confirmation.\n"
+                    "Fix: Use --confirm to bypass: llm-monitor history purge --confirm",
+                    err=True,
+                )
+                sys.exit(1)
+
+            click.echo("", err=True)
+            click.echo("WARNING: This will permanently delete all usage history.", err=True)
+            click.echo(f"  Database: {info['db_path']}", err=True)
+            click.echo(
+                f"  Records:  {info['sample_count']:,} samples across "
+                f"{len(info['providers'])} providers",
+                err=True,
+            )
+            click.echo(f"  Oldest:   {(info['oldest'] or 'n/a')[:10]}", err=True)
+            click.echo(f"  Size:     {_format_size(info['db_size'])}", err=True)
+            click.echo("", err=True)
+            click.echo("This action cannot be undone.", err=True)
+            click.echo("", err=True)
+
+            try:
+                response = input("Type 'purge' to confirm: ")
+            except EOFError:
+                click.echo("Aborted. History was not modified.", err=True)
+                return
+
+            if response != "purge":
+                click.echo("Aborted. History was not modified.", err=True)
+                return
+
+        store.purge()
+        click.echo("History purged successfully.", err=True)
+    finally:
+        store.close()
+
+
+@history.command(name="export")
+@click.option(
+    "--format", "export_format", required=True,
+    type=click.Choice(["sql", "jsonl", "csv"]),
+    help="Export format.",
+)
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def history_export(export_format: str, config_path: str | None) -> None:
+    """Export all history data for backup or migration."""
+    _load_config_or_exit(config_path)
+    store = HistoryStore()
+    store.open()
+    try:
+        if export_format == "sql":
+            output = store.export_sql()
+        elif export_format == "jsonl":
+            output = store.export_jsonl()
+        elif export_format == "csv":
+            output = store.export_csv()
+        else:
+            output = ""
+        click.echo(output, nl=False)
+    finally:
+        store.close()
+
+
+@history.command(name="report")
+@click.option("--days", default=7, type=int, help="Number of days to report on.")
+@click.option("--from", "from_date", default=None, help="Start date (YYYY-MM-DD).")
+@click.option("--to", "to_date", default=None, help="End date (YYYY-MM-DD).")
+@click.option(
+    "--format", "output_format", default="table",
+    type=click.Choice(["table", "json", "csv"]),
+    help="Output format.",
+)
+@click.option(
+    "--provider", "-p", default=None,
+    help="Filter to specific provider(s).",
+)
+@click.option("--window", "window_filter", default=None, help="Filter to specific window name.")
+@click.option(
+    "--granularity", default="daily",
+    type=click.Choice(["raw", "hourly", "daily"]),
+    help="Aggregation granularity.",
+)
+@click.option("--models", is_flag=True, default=False, help="Include per-model breakdown.")
+@click.option("--no-colour", is_flag=True, default=False, help="Disable colour output.")
+@click.option(
+    "--colour", default=None,
+    help="Force colour output (use --colour=always).",
+)
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def history_report(
+    days: int,
+    from_date: str | None,
+    to_date: str | None,
+    output_format: str,
+    provider: str | None,
+    window_filter: str | None,
+    granularity: str,
+    models: bool,
+    no_colour: bool,
+    colour: str | None,
+    config_path: str | None,
+) -> None:
+    """Display usage report from history data."""
+    config = _load_config_or_exit(config_path)
+    _run_report(
+        config=config,
+        provider_filter=provider,
+        days=days,
+        from_date=from_date,
+        to_date=to_date,
+        output_format=output_format,
+        granularity=granularity,
+        include_models=models,
+        window_filter=window_filter,
+        no_colour=no_colour,
+        colour=colour,
+    )
+
+
+# ======================================================================
+# Report implementation
+# ======================================================================
+
+
+def _run_report(
+    *,
+    config: dict,
+    provider_filter: str | None,
+    days: int | None,
+    from_date: str | None,
+    to_date: str | None,
+    output_format: str,
+    granularity: str,
+    include_models: bool,
+    window_filter: str | None,
+    no_colour: bool,
+    colour: str | None,
+) -> None:
+    """Shared report logic for --report flag and history report subcommand."""
+    store = HistoryStore()
+    store.open()
+    try:
+        # Resolve date range
+        now = datetime.now(timezone.utc)
+        if to_date:
+            to_dt = datetime.fromisoformat(to_date).replace(tzinfo=timezone.utc)
+        else:
+            to_dt = now
+
+        if from_date:
+            from_dt = datetime.fromisoformat(from_date).replace(tzinfo=timezone.utc)
+        else:
+            report_days = days if days is not None else 7
+            from_dt = to_dt - timedelta(days=report_days)
+
+        # Query
+        samples = store.query_samples(
+            provider=provider_filter,
+            window=window_filter,
+            from_dt=from_dt,
+            to_dt=to_dt,
+        )
+
+        model_rows = []
+        if include_models:
+            model_rows = store.query_model_usage(
+                provider=provider_filter,
+                from_dt=from_dt,
+                to_dt=to_dt,
+            )
+
+        # Aggregate
+        aggregated = store.aggregate_samples(samples, granularity)
+        model_aggregated = []
+        if include_models:
+            model_aggregated = store.aggregate_model_usage(model_rows, granularity)
+
+        # Format output
+        if output_format == "json":
+            output = _format_report_json(
+                aggregated, model_aggregated, from_dt, to_dt, granularity
+            )
+        elif output_format == "csv":
+            output = _format_report_csv(aggregated, model_aggregated)
+        else:
+            use_colour = _resolve_colour(no_colour, colour)
+            output = _format_report_table(
+                aggregated, model_aggregated, from_dt, to_dt, use_colour
+            )
+
+        click.echo(output)
+    finally:
+        store.close()
+
+
+def _format_report_json(
+    samples: list[dict],
+    model_usage: list[dict],
+    from_dt: datetime,
+    to_dt: datetime,
+    granularity: str,
+) -> str:
+    """Format report as JSON."""
+    import json
+    report = {
+        "report": {
+            "from": from_dt.isoformat(),
+            "to": to_dt.isoformat(),
+            "granularity": granularity,
+            "sample_count": len(samples),
+        },
+        "usage": samples,
+    }
+    if model_usage:
+        report["model_usage"] = model_usage
+    return json.dumps(report, indent=2)
+
+
+def _format_report_csv(
+    samples: list[dict],
+    model_usage: list[dict],
+) -> str:
+    """Format report as CSV."""
+    import csv
+    import io
+
+    output = io.StringIO()
+    if samples:
+        keys = list(samples[0].keys())
+        writer = csv.DictWriter(output, fieldnames=keys)
+        writer.writeheader()
+        for row in samples:
+            writer.writerow(row)
+
+    if model_usage:
+        output.write("\n")
+        keys = list(model_usage[0].keys())
+        writer = csv.DictWriter(output, fieldnames=keys)
+        writer.writeheader()
+        for row in model_usage:
+            writer.writerow(row)
+
+    return output.getvalue()
+
+
+def _format_report_table(
+    samples: list[dict],
+    model_usage: list[dict],
+    from_dt: datetime,
+    to_dt: datetime,
+    use_colour: bool,
+) -> str:
+    """Format report as a Rich table."""
+    if not samples:
+        return "No history data found for the specified period."
+
+    from_str = from_dt.strftime("%d %b %Y")
+    to_str = to_dt.strftime("%d %b %Y")
+
+    lines: list[str] = []
+    lines.append(f"LLM Usage Report                     {from_str} - {to_str}")
+    lines.append("=" * 60)
+
+    # Group by provider
+    providers: dict[str, list[dict]] = {}
+    for s in samples:
+        providers.setdefault(s["provider"], []).append(s)
+
+    for provider_name, provider_samples in providers.items():
+        lines.append("")
+        lines.append(f"  {provider_name}")
+        lines.append("-" * 60)
+
+        # Group by window
+        windows: dict[str, list[dict]] = {}
+        for s in provider_samples:
+            windows.setdefault(s["window_name"], []).append(s)
+
+        for window_name, window_samples in windows.items():
+            utils = [
+                s["utilisation"] for s in window_samples
+                if s["utilisation"] is not None
+            ]
+            if utils:
+                avg = sum(utils) / len(utils)
+                peak = max(utils)
+                exceeded = sum(
+                    1 for s in window_samples
+                    if s.get("status") == "exceeded"
+                )
+                lines.append(
+                    f"  {window_name:<20} avg {avg:.0f}%   "
+                    f"peak {peak:.0f}%   exceeded {exceeded}x"
+                )
+
+                # Sparkline
+                sparkline = _make_sparkline(utils)
+                lines.append(f"  {'':<20} {sparkline}")
+            else:
+                lines.append(f"  {window_name:<20} no data")
+
+    # Model usage section
+    if model_usage:
+        lines.append("")
+        lines.append("  Per-Model Breakdown")
+        lines.append("-" * 60)
+        for mu in model_usage:
+            parts = [f"  {mu['model']:<24}"]
+            if mu.get("total_tokens") is not None:
+                parts.append(f"{mu['total_tokens']:,} tokens")
+            if mu.get("cost") is not None:
+                parts.append(f"${mu['cost']:.2f}")
+            if mu.get("request_count") is not None:
+                parts.append(f"{mu['request_count']} requests")
+            lines.append("  ".join(parts))
+
+    lines.append("")
+    lines.append("=" * 60)
+    total_samples = sum(s.get("sample_count", 1) for s in samples)
+    lines.append(
+        f"  Period: {(to_dt - from_dt).days} days | "
+        f"Samples: {total_samples:,}"
+    )
+
+    return "\n".join(lines)
+
+
+def _make_sparkline(values: list[float]) -> str:
+    """Generate a Unicode sparkline from a list of values."""
+    if not values:
+        return ""
+    blocks = " \u2581\u2582\u2583\u2584\u2585\u2586\u2587\u2588"
+    lo = min(values)
+    hi = max(values)
+    spread = hi - lo if hi != lo else 1
+    chars = []
+    for v in values:
+        idx = int((v - lo) / spread * (len(blocks) - 1))
+        chars.append(blocks[idx])
+    return "".join(chars)
