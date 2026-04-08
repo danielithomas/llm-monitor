@@ -134,10 +134,17 @@ def format_compact_line(
     # Show the first (primary) window
     if status.windows:
         w = status.windows[0]
-        bar = _build_bar(w.utilisation, w.status, width=_COMPACT_BAR_WIDTH)
-        pct = f" {w.utilisation:5.1f}%"
-        line.append_text(bar)
-        line.append(pct, style=STATUS_COLOURS.get(w.status, "white"))
+        if w.unit == "usd":
+            bar = Text(" " * _COMPACT_BAR_WIDTH)
+            val = w.raw_value or 0.0
+            val_str = f" ${val:,.2f}"
+            line.append_text(bar)
+            line.append(val_str, style=STATUS_COLOURS.get(w.status, "white"))
+        else:
+            bar = _build_bar(w.utilisation, w.status, width=_COMPACT_BAR_WIDTH)
+            pct = f" {w.utilisation:5.1f}%"
+            line.append_text(bar)
+            line.append(pct, style=STATUS_COLOURS.get(w.status, "white"))
         human = format_resets_in_human(w.resets_at)
         if human:
             line.append(f"  resets {human}", style="dim")
@@ -190,9 +197,14 @@ def _build_provider_panel(
 
     for window in status.windows:
         name = Text(f"  {window.name}")
-        bar = _build_bar(window.utilisation, window.status)
         style = STATUS_COLOURS.get(window.status, "white")
-        pct = Text(f"{window.utilisation:5.1f}%", style=style)
+        if window.unit == "usd":
+            bar = Text(" " * _BAR_WIDTH)
+            val = window.raw_value or 0.0
+            pct = Text(f"${val:,.2f}", style=style)
+        else:
+            bar = _build_bar(window.utilisation, window.status)
+            pct = Text(f"{window.utilisation:5.1f}%", style=style)
 
         reset_parts = Text()
         human = format_resets_in_human(window.resets_at)
