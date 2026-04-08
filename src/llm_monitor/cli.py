@@ -15,12 +15,19 @@ import click
 
 import llm_monitor
 from llm_monitor.cache import ProviderCache
-from llm_monitor.config import get_cache_dir, load_config
+from llm_monitor.config import get_cache_dir, get_pid_file, get_state_file, load_config
 from llm_monitor.core import determine_exit_code, fetch_all
+from llm_monitor.daemon import (
+    DaemonRunner,
+    daemonise,
+    is_daemon_running,
+    read_state,
+)
 from llm_monitor.formatters.json_fmt import format_json
 from llm_monitor.formatters.table_fmt import format_table
 from llm_monitor.history import HistoryStore
 from llm_monitor.providers import PROVIDERS, get_enabled_providers
+from llm_monitor.security import is_container_mode
 
 
 def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
@@ -250,6 +257,54 @@ def status(
             configured_str = "configured" if configured else "not configured"
             click.echo(f"{name}: {enabled_str}, {configured_str}")
         return
+
+    # Daemon detection: if daemon is running and --fresh not set,
+    # read from the history DB instead of fetching directly.
+    if not fresh:
+        running, daemon_pid = is_daemon_running(config)
+        if running:
+            store = HistoryStore()
+            store.open()
+            try:
+                provider_filter_list = (
+                    [p.strip() for p in provider.split(",")]
+                    if provider else None
+                )
+                statuses = store.get_latest_statuses(provider_filter_list)
+                last_poll = store.get_last_poll_time()
+            finally:
+                store.close()
+
+            if statuses:
+                # Report daemon mode to stderr
+                if not quiet:
+                    if last_poll:
+                        ago = int(
+                            (datetime.now(timezone.utc) - last_poll).total_seconds()
+                        )
+                        if ago < 60:
+                            ago_str = f"{ago}s ago"
+                        else:
+                            ago_str = f"{ago // 60}m ago"
+                    else:
+                        ago_str = "unknown"
+                    click.echo(
+                        f"Reading from daemon (last poll {ago_str})", err=True
+                    )
+
+                use_colour = _resolve_colour(no_colour, colour)
+                if now:
+                    output = format_table(statuses, colour=use_colour)
+                else:
+                    output = format_json(
+                        statuses, version=llm_monitor.__version__
+                    )
+                click.echo(output)
+
+                exit_code = determine_exit_code(statuses)
+                if exit_code != 0:
+                    sys.exit(exit_code)
+                return
 
     # Get enabled providers (filtered by --provider if given)
     if provider:
@@ -712,3 +767,304 @@ def _make_sparkline(values: list[float]) -> str:
         idx = int((v - lo) / spread * (len(blocks) - 1))
         chars.append(blocks[idx])
     return "".join(chars)
+
+
+# ======================================================================
+# daemon subcommand group
+# ======================================================================
+
+
+@cli.group(name="daemon")
+def daemon_group() -> None:
+    """Daemon management commands (start, stop, status, run, install, uninstall)."""
+
+
+@daemon_group.command(name="start")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def daemon_start(config_path: str | None) -> None:
+    """Start the daemon as a background process."""
+    if is_container_mode():
+        click.echo(
+            "Error: 'daemon start' is not available in container mode.\n"
+            "Fix: Use 'daemon run' instead (foreground).",
+            err=True,
+        )
+        sys.exit(1)
+
+    config = _load_config_or_exit(config_path)
+    running, existing_pid = is_daemon_running(config)
+    if running:
+        click.echo(
+            f"Error: Daemon is already running (PID {existing_pid}).\n"
+            "Fix: Use 'daemon stop' first, or 'daemon status' for details.",
+            err=True,
+        )
+        sys.exit(1)
+
+    child_pid = daemonise(config)
+    click.echo(f"Daemon started (PID {child_pid})", err=True)
+
+
+@daemon_group.command(name="run")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def daemon_run(config_path: str | None) -> None:
+    """Run daemon in the foreground (for systemd/Docker)."""
+    config = _load_config_or_exit(config_path)
+    running, existing_pid = is_daemon_running(config)
+    if running:
+        click.echo(
+            f"Error: Daemon is already running (PID {existing_pid}).\n"
+            "Fix: Use 'daemon stop' first.",
+            err=True,
+        )
+        sys.exit(1)
+
+    runner = DaemonRunner(config, foreground=True)
+    runner.run()
+
+
+@daemon_group.command(name="stop")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def daemon_stop(config_path: str | None) -> None:
+    """Stop the running daemon."""
+    import signal as sig
+    import time as t
+
+    config = _load_config_or_exit(config_path)
+    running, pid = is_daemon_running(config)
+    if not running:
+        click.echo("Daemon is not running.", err=True)
+        return
+
+    # Send SIGTERM
+    try:
+        os.kill(pid, sig.SIGTERM)
+    except ProcessLookupError:
+        click.echo("Daemon process already exited.", err=True)
+        from llm_monitor.daemon import remove_pid_file
+        remove_pid_file(get_pid_file(config))
+        return
+
+    # Wait up to 5 seconds for clean shutdown
+    for _ in range(25):
+        t.sleep(0.2)
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            click.echo("Daemon stopped.", err=True)
+            return
+
+    # SIGKILL as last resort
+    try:
+        os.kill(pid, sig.SIGKILL)
+    except ProcessLookupError:
+        pass
+
+    from llm_monitor.daemon import remove_pid_file
+    remove_pid_file(get_pid_file(config))
+    click.echo("Daemon killed.", err=True)
+
+
+@daemon_group.command(name="status")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+@click.option("--quiet", "-q", is_flag=True, default=False, help="Exit 0/1 silently (for health checks).")
+def daemon_status(config_path: str | None, quiet: bool) -> None:
+    """Show daemon status."""
+    config = _load_config_or_exit(config_path)
+    running, pid = is_daemon_running(config)
+
+    if not running:
+        if quiet:
+            sys.exit(1)
+        click.echo("Daemon: stopped")
+        sys.exit(1)
+
+    if quiet:
+        sys.exit(0)
+
+    # Read state file for details
+    state_path = get_state_file(config)
+    state = read_state(state_path)
+
+    # Calculate uptime
+    uptime_str = ""
+    if state and state.get("started_at"):
+        try:
+            started = datetime.fromisoformat(state["started_at"])
+            delta = datetime.now(timezone.utc) - started
+            hours = int(delta.total_seconds() // 3600)
+            minutes = int((delta.total_seconds() % 3600) // 60)
+            if hours > 0:
+                uptime_str = f"{hours}h {minutes}m"
+            else:
+                uptime_str = f"{minutes}m"
+        except (ValueError, TypeError):
+            uptime_str = "unknown"
+
+    click.echo(f"Daemon: running (PID {pid}, uptime {uptime_str})")
+
+    # Per-provider status
+    if state and state.get("providers"):
+        now = datetime.now(timezone.utc)
+        for pname, pinfo in state["providers"].items():
+            last_poll_str = ""
+            if pinfo.get("last_poll"):
+                try:
+                    last_dt = datetime.fromisoformat(pinfo["last_poll"])
+                    ago_secs = int((now - last_dt).total_seconds())
+                    if ago_secs < 60:
+                        last_poll_str = f"last poll {ago_secs}s ago"
+                    else:
+                        last_poll_str = f"last poll {ago_secs // 60}m ago"
+                except (ValueError, TypeError):
+                    last_poll_str = "last poll unknown"
+
+            next_poll_str = ""
+            if pinfo.get("next_poll"):
+                try:
+                    next_dt = datetime.fromisoformat(pinfo["next_poll"])
+                    until_secs = int((next_dt - now).total_seconds())
+                    if until_secs <= 0:
+                        next_poll_str = "next now"
+                    elif until_secs < 60:
+                        next_poll_str = f"next in {until_secs}s"
+                    else:
+                        next_poll_str = f"next in {until_secs // 60}m"
+                except (ValueError, TypeError):
+                    next_poll_str = ""
+
+            pstatus = pinfo.get("status", "unknown")
+            click.echo(
+                f"  {pname:<12} {last_poll_str:<22} {next_poll_str:<16} {pstatus}"
+            )
+
+    # Database info
+    store = HistoryStore()
+    store.open()
+    try:
+        info = store.stats()
+        click.echo(
+            f"Database: {info['db_path']} ({_format_size(info['db_size'])})"
+        )
+    finally:
+        store.close()
+
+
+@daemon_group.command(name="install")
+@click.option("--config", "-c", "config_path", default=None, help="Config file path override.")
+def daemon_install(config_path: str | None) -> None:
+    """Install systemd user service."""
+    import shutil
+    import subprocess
+
+    if is_container_mode():
+        click.echo(
+            "Error: 'daemon install' is not available in container mode.\n"
+            "Fix: Use 'daemon run' directly with Docker.",
+            err=True,
+        )
+        sys.exit(1)
+
+    _load_config_or_exit(config_path)
+
+    # Resolve the llm-monitor binary path
+    binary = shutil.which("llm-monitor")
+    if not binary:
+        binary = f"{sys.executable} -m llm_monitor"
+
+    service_dir = os.path.expanduser("~/.config/systemd/user")
+    service_path = os.path.join(service_dir, "llm-monitor.service")
+
+    unit_content = f"""\
+[Unit]
+Description=LLM Usage Monitor Daemon
+Documentation=https://github.com/danielithomas/llm-monitor
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=exec
+ExecStart={binary} daemon run
+Restart=on-failure
+RestartSec=30
+Environment=LLM_MONITOR_LOG_LEVEL=info
+
+[Install]
+WantedBy=default.target
+"""
+
+    os.makedirs(service_dir, exist_ok=True)
+    with open(service_path, "w") as f:
+        f.write(unit_content)
+
+    click.echo(f"Service file written: {service_path}", err=True)
+
+    # Enable and start
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "daemon-reload"],
+            check=True, capture_output=True,
+        )
+        subprocess.run(
+            ["systemctl", "--user", "enable", "--now", "llm-monitor"],
+            check=True, capture_output=True,
+        )
+        click.echo("Service enabled and started.", err=True)
+    except FileNotFoundError:
+        click.echo(
+            "Warning: systemctl not found. Service file written but not enabled.\n"
+            "Fix: Run manually: systemctl --user daemon-reload && "
+            "systemctl --user enable --now llm-monitor",
+            err=True,
+        )
+    except subprocess.CalledProcessError as exc:
+        click.echo(
+            f"Warning: systemctl command failed: {exc.stderr.decode().strip()}\n"
+            "Fix: Check systemd status with: systemctl --user status llm-monitor",
+            err=True,
+        )
+
+
+@daemon_group.command(name="uninstall")
+def daemon_uninstall() -> None:
+    """Remove systemd user service."""
+    import subprocess
+
+    if is_container_mode():
+        click.echo(
+            "Error: 'daemon uninstall' is not available in container mode.",
+            err=True,
+        )
+        sys.exit(1)
+
+    service_path = os.path.expanduser(
+        "~/.config/systemd/user/llm-monitor.service"
+    )
+
+    # Disable and stop
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "disable", "--now", "llm-monitor"],
+            check=True, capture_output=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+
+    # Remove unit file
+    try:
+        os.unlink(service_path)
+        click.echo("Service file removed.", err=True)
+    except FileNotFoundError:
+        click.echo("Service file not found — already uninstalled.", err=True)
+        return
+
+    # Reload
+    try:
+        subprocess.run(
+            ["systemctl", "--user", "daemon-reload"],
+            check=True, capture_output=True,
+        )
+    except (FileNotFoundError, subprocess.CalledProcessError):
+        pass
+
+    click.echo("Service uninstalled.", err=True)

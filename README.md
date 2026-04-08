@@ -234,6 +234,107 @@ llm-monitor history purge
 llm-monitor history purge --confirm   # non-interactive
 ```
 
+## Daemon Mode
+
+The daemon runs in the background, continuously polling providers and writing to the history database. When a daemon is running, CLI commands automatically read from the database instead of fetching directly.
+
+### Usage
+
+```bash
+# Start background daemon
+llm-monitor daemon start
+
+# Run in foreground (for systemd/Docker)
+llm-monitor daemon run
+
+# Check status
+llm-monitor daemon status
+
+# Stop the daemon
+llm-monitor daemon stop
+
+# Install as systemd user service (auto-start on login)
+llm-monitor daemon install
+
+# Remove systemd service
+llm-monitor daemon uninstall
+```
+
+When the daemon is running, normal CLI commands read from the database:
+
+```bash
+llm-monitor --now          # reads from daemon's DB
+llm-monitor --report       # reports from daemon's history
+llm-monitor --fresh        # bypass daemon, fetch directly
+```
+
+### Configuration
+
+```toml
+[general]
+poll_interval = 600          # global poll interval (10 minutes)
+
+[daemon]
+log_file = ""                # empty = default (~/.local/state/llm-monitor/daemon.log)
+pid_file = ""                # empty = default ($XDG_RUNTIME_DIR/llm-monitor/daemon.pid)
+
+[providers.ollama]
+poll_interval = 60           # per-provider override (local services can poll faster)
+```
+
+**PID file:** `$XDG_RUNTIME_DIR/llm-monitor/daemon.pid` (or `/tmp/llm-monitor-<uid>/daemon.pid`)
+**Log file:** `$XDG_STATE_HOME/llm-monitor/daemon.log` (or `~/.local/state/llm-monitor/daemon.log`)
+
+## Docker
+
+The daemon mode maps naturally to Docker. The container runs `llm-monitor daemon run` in the foreground.
+
+### Quick Start
+
+```bash
+docker build -t llm-monitor .
+docker compose up -d
+```
+
+### docker-compose.yml
+
+```yaml
+services:
+  llm-monitor:
+    build: .
+    restart: unless-stopped
+    volumes:
+      - llm-monitor-data:/data
+      - ${HOME}/.config/llm-monitor/config.toml:/home/monitor/.config/llm-monitor/config.toml:ro
+      - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - XAI_API_KEY=${XAI_API_KEY}
+
+volumes:
+  llm-monitor-data:
+```
+
+### Container-Aware Mode
+
+When `$LLM_MONITOR_CONTAINER=1` is set (or `/.dockerenv` exists):
+
+- Permission checks are skipped
+- Keyring is not attempted (no D-Bus in containers)
+- `daemon install`/`uninstall` are disabled (use `daemon run` directly)
+
+### Accessing Data from Host
+
+```bash
+# Point host CLI at the container's database
+export LLM_MONITOR_DATA_DIR=/path/to/docker/volume
+llm-monitor --now
+llm-monitor --report --days 7
+
+# Or use docker exec
+docker exec llm-monitor llm-monitor --now
+```
+
 ## Scripting Examples
 
 ```bash

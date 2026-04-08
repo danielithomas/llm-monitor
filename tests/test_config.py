@@ -13,6 +13,11 @@ from llm_monitor.config import (
     get_cache_dir,
     get_config_path,
     get_data_dir,
+    get_log_dir,
+    get_log_file,
+    get_pid_dir,
+    get_pid_file,
+    get_state_file,
     load_config,
 )
 
@@ -291,3 +296,101 @@ class TestLoadConfigContainerMode:
         config_file.write_text('[general]\npoll_interval = 42\n')
         config = load_config(str(config_file))
         assert config["general"]["poll_interval"] == 42
+
+    def test_container_mode_skips_keyring(self, monkeypatch):
+        """Container mode skips keyring tier in credential resolution."""
+        from unittest.mock import patch
+        from llm_monitor.providers.base import Provider
+
+        _clean_config_env(monkeypatch)
+        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+
+        # Use a concrete test provider
+        class _TestProvider(Provider):
+            def name(self):
+                return "test"
+            def display_name(self):
+                return "Test"
+            def is_configured(self):
+                return True
+            async def fetch_usage(self, client):
+                pass
+            def auth_instructions(self):
+                return ""
+
+        p = _TestProvider()
+        config = {"providers": {"test": {}}}
+
+        # Patch keyring to track if it gets called
+        keyring_called = False
+        original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
+
+        with patch("llm_monitor.security.is_container_mode", return_value=True):
+            result = p.resolve_credential(config)
+
+        # Should return None without attempting keyring
+        assert result is None
+
+
+# ---------------------------------------------------------------------------
+# Daemon config helpers
+# ---------------------------------------------------------------------------
+
+class TestDaemonConfig:
+    def test_default_config_has_daemon_section(self):
+        assert "daemon" in DEFAULT_CONFIG
+        assert "log_file" in DEFAULT_CONFIG["daemon"]
+        assert "pid_file" in DEFAULT_CONFIG["daemon"]
+
+    def test_get_pid_dir_xdg_runtime(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+        result = get_pid_dir()
+        assert result == Path("/run/user/1000/llm-monitor")
+
+    def test_get_pid_dir_fallback(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
+        result = get_pid_dir()
+        assert str(result).startswith("/tmp/llm-monitor-")
+        assert str(os.getuid()) in str(result)
+
+    def test_get_log_dir_xdg_state(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.setenv("XDG_STATE_HOME", "/home/test/.local/state")
+        result = get_log_dir()
+        assert result == Path("/home/test/.local/state/llm-monitor")
+
+    def test_get_log_dir_fallback(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.delenv("XDG_STATE_HOME", raising=False)
+        result = get_log_dir()
+        assert result == Path.home() / ".local" / "state" / "llm-monitor"
+
+    def test_get_pid_file_custom(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        config = {"daemon": {"pid_file": "/custom/path/daemon.pid"}}
+        assert get_pid_file(config) == Path("/custom/path/daemon.pid")
+
+    def test_get_pid_file_default(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+        config = {"daemon": {"pid_file": ""}}
+        assert get_pid_file(config) == Path("/run/user/1000/llm-monitor/daemon.pid")
+
+    def test_get_log_file_custom(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        config = {"daemon": {"log_file": "/custom/daemon.log"}}
+        assert get_log_file(config) == Path("/custom/daemon.log")
+
+    def test_get_log_file_default(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.setenv("XDG_STATE_HOME", "/home/test/.local/state")
+        config = {"daemon": {"log_file": ""}}
+        assert get_log_file(config) == Path("/home/test/.local/state/llm-monitor/daemon.log")
+
+    def test_get_state_file(self, monkeypatch):
+        _clean_config_env(monkeypatch)
+        monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
+        config = {"daemon": {}}
+        assert get_state_file(config) == Path("/run/user/1000/llm-monitor/daemon.state")

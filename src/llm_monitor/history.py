@@ -399,6 +399,116 @@ class HistoryStore:
         return total
 
     # ------------------------------------------------------------------
+    # Daemon-aware reads (CLI reads from DB when daemon is running)
+    # ------------------------------------------------------------------
+
+    def get_latest_statuses(
+        self, providers: list[str] | None = None
+    ) -> list[ProviderStatus]:
+        """Reconstruct ProviderStatus objects from the most recent DB rows.
+
+        Returns one ProviderStatus per provider, built from the latest
+        usage_samples row for each (provider, window_name) pair plus
+        matching model_usage rows.
+        """
+        # Get most recent row per provider+window
+        rows = self.conn.execute(
+            """
+            SELECT * FROM usage_samples
+            WHERE id IN (
+                SELECT MAX(id) FROM usage_samples
+                GROUP BY provider, window_name
+            )
+            ORDER BY provider, window_name
+            """
+        ).fetchall()
+
+        # Group by provider
+        provider_windows: dict[str, list[dict[str, Any]]] = {}
+        for row in rows:
+            d = dict(row)
+            pname = d["provider"]
+            if providers and pname not in providers:
+                continue
+            provider_windows.setdefault(pname, []).append(d)
+
+        statuses: list[ProviderStatus] = []
+        for pname, window_rows in provider_windows.items():
+            # Reconstruct UsageWindow objects
+            windows: list[UsageWindow] = []
+            ts_str = window_rows[0]["timestamp"]
+            for wr in window_rows:
+                resets_at = None
+                if wr["resets_at"]:
+                    resets_at = datetime.fromisoformat(wr["resets_at"])
+                windows.append(UsageWindow(
+                    name=wr["window_name"],
+                    utilisation=wr["utilisation"],
+                    resets_at=resets_at,
+                    status=wr["status"] or "normal",
+                    unit=wr["unit"],
+                    raw_value=wr["raw_value"],
+                    raw_limit=wr["raw_limit"],
+                ))
+
+            # Get most recent model_usage for this provider
+            model_rows = self.conn.execute(
+                """
+                SELECT * FROM model_usage
+                WHERE provider = ? AND timestamp = (
+                    SELECT MAX(timestamp) FROM model_usage WHERE provider = ?
+                )
+                ORDER BY model
+                """,
+                (pname, pname),
+            ).fetchall()
+            model_usage = [
+                ModelUsage(
+                    model=mr["model"],
+                    input_tokens=mr["input_tokens"],
+                    output_tokens=mr["output_tokens"],
+                    total_tokens=mr["total_tokens"],
+                    cost=mr["cost"],
+                    request_count=mr["request_count"],
+                    period=mr["period"],
+                )
+                for mr in model_rows
+            ]
+
+            ts = datetime.fromisoformat(ts_str)
+            statuses.append(ProviderStatus(
+                provider_name=pname,
+                provider_display=pname.title(),
+                timestamp=ts,
+                cached=True,
+                cache_age_seconds=int(
+                    (datetime.now(timezone.utc) - ts).total_seconds()
+                ),
+                windows=windows,
+                model_usage=model_usage,
+            ))
+
+        return statuses
+
+    def get_last_poll_time(
+        self, provider: str | None = None
+    ) -> Optional[datetime]:
+        """Return the most recent timestamp from usage_samples."""
+        if provider:
+            row = self.conn.execute(
+                "SELECT MAX(timestamp) FROM usage_samples WHERE provider = ?",
+                (provider,),
+            ).fetchone()
+        else:
+            row = self.conn.execute(
+                "SELECT MAX(timestamp) FROM usage_samples"
+            ).fetchone()
+
+        if row and row[0]:
+            return datetime.fromisoformat(row[0])
+        return None
+
+    # ------------------------------------------------------------------
     # Querying for reports
     # ------------------------------------------------------------------
 
