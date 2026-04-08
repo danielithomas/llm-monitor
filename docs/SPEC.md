@@ -858,6 +858,29 @@ After writing the unit file, runs `systemctl --user daemon-reload && systemctl -
 - `--fresh`: fetch directly from providers (bypass daemon), write to DB.
 - The CLI emits a note to stderr if the daemon is running: `Reading from daemon (last poll 2m ago)`.
 
+#### 4.2.7.1 Implementation Design
+
+**Daemonisation:** Uses `os.fork()` double-fork (fork → `os.setsid()` → fork again) for proper POSIX daemonisation. No external dependencies. All forking happens before any asyncio or threading setup. The child redirects stdin/stdout/stderr to `/dev/null`, writes the PID file, then enters the poll loop. The parent prints the child PID and exits.
+
+**Poll loop architecture:** The daemon uses a `DaemonRunner` class in `daemon.py` that wraps `core.fetch_all()` in an asyncio event loop. Per-provider polling intervals are tracked via a `dict[str, float]` mapping provider name to the next poll time (monotonic clock). Each iteration, the loop finds the soonest due provider, sleeps via `asyncio.sleep()` until then, polls all providers whose time has arrived, records results to the history DB via `HistoryStore.record()`, and updates each provider's next poll time. This naturally handles mixed intervals (e.g., 600s for cloud, 60s for local).
+
+**Signal handling:** Uses `loop.add_signal_handler()` (the correct asyncio-on-Unix pattern). Handlers only set flags (`_shutdown`, `_reload`) and wake a shared `asyncio.Event` so the sleep is interrupted immediately rather than waiting for the full interval. The poll loop checks flags between iterations.
+
+**State file:** `daemon status` reads per-provider last/next poll times from an ephemeral JSON state file at `$XDG_RUNTIME_DIR/llm-monitor/daemon.state`, written via `secure_write()` after each poll cycle. This avoids adding columns to the history DB schema. Contents: `{"started_at": "...", "providers": {"claude": {"last_poll": "...", "next_poll": "...", "status": "ok"}}}`.
+
+**CLI daemon-aware reads:** `HistoryStore` provides a `get_latest_statuses()` method that reconstructs `ProviderStatus` objects from the most recent rows per provider+window (similar query to the existing `_load_last_known()` but returning full data). The CLI calls this instead of `fetch_all()` when a running daemon is detected. A companion `get_last_poll_time()` method provides the "last poll Xm ago" value.
+
+**Logging:** Stdlib `logging` with a named logger `llm_monitor.daemon`. Foreground mode (`daemon run`) logs to stderr via `StreamHandler`. Background mode (`daemon start`) logs to the configured log file via `FileHandler`. Log level from `$LLM_MONITOR_LOG_LEVEL` (default `info`). Format: `%(asctime)s %(levelname)-8s %(message)s`.
+
+**Reused components:**
+- `core.fetch_all()` — the polling function the daemon wraps
+- `history.HistoryStore.record()` — write-on-fetch with meaningful-change detection
+- `cache.ProviderCache` — backoff state persistence, still used in daemon mode
+- `security.secure_write()` — for PID file and state file
+- `security.is_container_mode()` — for container-aware behaviour
+- `config.load_config()` — initial load and SIGHUP reload
+- `providers.get_enabled_providers()` — provider instantiation
+
 ### 4.3 Global Options
 
 | Flag | Short | Description | Default |
@@ -1976,61 +1999,72 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 **Goal:** Usage data is recorded over time and can be queried.
 
 **Core:**
-- [ ] SQLite history store creation with schema and migrations
-- [ ] `ModelUsage` dataclass and `model_usage` history table
-- [ ] History write-on-fetch with meaningful-change detection (in-memory last-known state)
-- [ ] `[history]` config section (enabled, retention_days)
-- [ ] `--no-history` flag
-- [ ] Automatic retention pruning on startup
-- [ ] `llm-monitor history purge` with typed confirmation and `--confirm`
-- [ ] `llm-monitor history stats` summary command
-- [ ] `llm-monitor --report` / `llm-monitor history report` (table, JSON, CSV formats)
-- [ ] `llm-monitor history export` (sql, jsonl, csv)
-- [ ] Report flags: `--days`, `--from`, `--to`, `--format`, `--granularity`, `--models`
+- [x] SQLite history store creation with schema and migrations
+- [x] `ModelUsage` dataclass and `model_usage` history table
+- [x] History write-on-fetch with meaningful-change detection (in-memory last-known state)
+- [x] `[history]` config section (enabled, retention_days)
+- [x] `--no-history` flag
+- [x] Automatic retention pruning on startup
+- [x] `llm-monitor history purge` with typed confirmation and `--confirm`
+- [x] `llm-monitor history stats` summary command
+- [x] `llm-monitor --report` / `llm-monitor history report` (table, JSON, CSV formats)
+- [x] `llm-monitor history export` (sql, jsonl, csv)
+- [x] Report flags: `--days`, `--from`, `--to`, `--format`, `--granularity`, `--models`
 
 **Tests:**
-- [ ] `test_history.py` — schema creation and version tracking, write-on-fetch inserts rows, meaningful-change detection: delta < 0.1% → no write, delta > 0.1% → write, status change → write, reset detection → write, cached response → no write
-- [ ] `test_history.py` — retention pruning deletes rows older than configured days and keeps recent rows, `PRAGMA auto_vacuum` set
-- [ ] `test_history.py` — purge interactive confirmation (mock stdin), purge `--confirm` flag, purge aborted on wrong input, purge when stdin is not TTY and no `--confirm` → error
-- [ ] `test_history.py` — stats command output (sample count, providers, date range, DB size)
-- [ ] `test_history.py` — report generation: table/JSON/CSV formats, date range filtering (`--from`, `--to`, `--days`), granularity aggregation (raw, hourly, daily), per-model breakdown (`--models`)
-- [ ] `test_history.py` — export formats: SQL is valid SQL, JSONL has one JSON object per line, CSV has header row
-- [ ] `test_history.py` — WAL mode enabled on new databases, concurrent read during write doesn't block
+- [x] `test_history.py` — schema creation and version tracking, write-on-fetch inserts rows, meaningful-change detection: delta < 0.1% → no write, delta > 0.1% → write, status change → write, reset detection → write, cached response → no write
+- [x] `test_history.py` — retention pruning deletes rows older than configured days and keeps recent rows, `PRAGMA auto_vacuum` set
+- [x] `test_history.py` — purge interactive confirmation (mock stdin), purge `--confirm` flag, purge aborted on wrong input, purge when stdin is not TTY and no `--confirm` → error
+- [x] `test_history.py` — stats command output (sample count, providers, date range, DB size)
+- [x] `test_history.py` — report generation: table/JSON/CSV formats, date range filtering (`--from`, `--to`, `--days`), granularity aggregation (raw, hourly, daily), per-model breakdown (`--models`)
+- [x] `test_history.py` — export formats: SQL is valid SQL, JSONL has one JSON object per line, CSV has header row
+- [x] `test_history.py` — WAL mode enabled on new databases, concurrent read during write doesn't block
 
 **Documentation:**
-- [ ] README.md update — add history section: `history stats`, `history purge`, `--report` usage with examples, `history export` formats, `--no-history` flag, `[history]` config section, data storage location (`~/.local/share/llm-monitor/history.db`)
+- [x] README.md update — add history section: `history stats`, `history purge`, `--report` usage with examples, `history export` formats, `--no-history` flag, `[history]` config section, data storage location (`~/.local/share/llm-monitor/history.db`)
 
 ### v0.3.0 - Daemon + Docker
 
 **Goal:** Continuous background collection without a terminal open.
 
+**Implementation phasing:**
+
+1. `config.py` — add `get_pid_dir()`, `get_log_dir()`, `get_pid_file(config)`, `get_log_file(config)`, `get_state_file(config)` path helpers; add `"daemon": {"log_file": "", "pid_file": ""}` to `DEFAULT_CONFIG`
+2. `providers/base.py` — wrap Tier 3 keyring block with `if not is_container_mode():` guard (skip keyring in containers)
+3. `history.py` — add `get_latest_statuses() -> list[ProviderStatus]` (reconstruct from most recent rows per provider+window) and `get_last_poll_time() -> datetime | None`
+4. `daemon.py` (NEW) — `DaemonRunner` class with asyncio poll loop, PID/state file management, signal handlers; `daemonise()` double-fork function; `is_daemon_running(config)` check (see Section 4.2.7.1 for design)
+5. `cli.py` — `daemon` subgroup with `start`/`stop`/`status`/`run`/`install`/`uninstall`; modify `status` command to detect running daemon and read from DB
+6. `Dockerfile`, `docker-compose.yml`, `.dockerignore` (see Section 15)
+7. `tests/test_daemon.py` (NEW) + additions to `test_cli.py`, `test_config.py`
+8. `README.md` — daemon and Docker sections
+
 **Core:**
-- [ ] Daemon mode: `daemon start`, `daemon stop`, `daemon status`, `daemon run`
-- [ ] Daemon: poll loop with global `poll_interval` (10m default), per-provider override
-- [ ] Daemon: PID file management, log file
-- [ ] Daemon: `daemon install` / `daemon uninstall` for systemd user service
-- [ ] CLI daemon detection: read from DB when daemon is running, fallback to standalone
-- [ ] SIGHUP config reload in daemon
-- [ ] Dockerfile and docker-compose.yml
-- [ ] Container-aware mode (`$LLM_MONITOR_CONTAINER`): skip permission checks, skip keyring, disable notifications
+- [x] Daemon mode: `daemon start`, `daemon stop`, `daemon status`, `daemon run`
+- [x] Daemon: poll loop with global `poll_interval` (10m default), per-provider override
+- [x] Daemon: PID file management, log file
+- [x] Daemon: `daemon install` / `daemon uninstall` for systemd user service
+- [x] CLI daemon detection: read from DB when daemon is running, fallback to standalone
+- [x] SIGHUP config reload in daemon
+- [x] Dockerfile and docker-compose.yml
+- [x] Container-aware mode (`$LLM_MONITOR_CONTAINER`): skip permission checks, skip keyring, disable notifications
 
 **Tests:**
-- [ ] `test_daemon.py` — `daemon run` starts poll loop and writes to history DB after first tick (with mocked providers)
-- [ ] `test_daemon.py` — poll loop respects per-provider `poll_interval` overrides
-- [ ] `test_daemon.py` — poll loop survives provider errors (one provider fails, others still polled)
-- [ ] `test_daemon.py` — PID file created on start, removed on clean shutdown
-- [ ] `test_daemon.py` — `daemon start` when already running → error with existing PID
-- [ ] `test_daemon.py` — `daemon stop` sends SIGTERM, waits, removes PID file
-- [ ] `test_daemon.py` — `daemon status` reports running/stopped, last poll time, next poll
-- [ ] `test_daemon.py` — SIGHUP triggers config reload without restart
-- [ ] `test_daemon.py` — SIGTERM triggers clean shutdown (flush pending writes, close DB, remove PID)
-- [ ] `test_cli.py` additions — CLI detects running daemon via PID file and reads from DB instead of fetching
-- [ ] `test_cli.py` additions — `--fresh` fetches directly even when daemon is running
-- [ ] `test_config.py` additions — container-aware mode: permission checks skipped when `$LLM_MONITOR_CONTAINER=1`
+- [x] `test_daemon.py` — `daemon run` starts poll loop and writes to history DB after first tick (with mocked providers)
+- [x] `test_daemon.py` — poll loop respects per-provider `poll_interval` overrides
+- [x] `test_daemon.py` — poll loop survives provider errors (one provider fails, others still polled)
+- [x] `test_daemon.py` — PID file created on start, removed on clean shutdown
+- [x] `test_daemon.py` — `daemon start` when already running → error with existing PID
+- [x] `test_daemon.py` — `daemon stop` sends SIGTERM, waits, removes PID file
+- [x] `test_daemon.py` — `daemon status` reports running/stopped, last poll time, next poll
+- [x] `test_daemon.py` — SIGHUP triggers config reload without restart
+- [x] `test_daemon.py` — SIGTERM triggers clean shutdown (flush pending writes, close DB, remove PID)
+- [x] `test_cli.py` additions — CLI detects running daemon via PID file and reads from DB instead of fetching
+- [x] `test_cli.py` additions — `--fresh` fetches directly even when daemon is running
+- [x] `test_config.py` additions — container-aware mode: permission checks skipped when `$LLM_MONITOR_CONTAINER=1`
 - [ ] Docker integration: build image, `docker run` starts daemon, `docker exec llm-monitor --now` returns data (optional, CI-permitting)
 
 **Documentation:**
-- [ ] README.md update — add daemon section: `daemon start/stop/status/run` usage, systemd integration (`daemon install`), `[daemon]` config section, poll interval configuration. Add Docker section: Dockerfile usage, docker-compose.yml example, environment variable credentials, volume mount for history DB, container-aware mode
+- [x] README.md update — add daemon section: `daemon start/stop/status/run` usage, systemd integration (`daemon install`), `[daemon]` config section, poll interval configuration. Add Docker section: Dockerfile usage, docker-compose.yml example, environment variable credentials, volume mount for history DB, container-aware mode
 
 ### v0.4.0 - Monitor TUI
 

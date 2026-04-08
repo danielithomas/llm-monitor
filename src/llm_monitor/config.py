@@ -39,6 +39,10 @@ DEFAULT_CONFIG: dict = {
         "enabled": True,
         "retention_days": 90,
     },
+    "daemon": {
+        "log_file": "",
+        "pid_file": "",
+    },
 }
 
 
@@ -78,6 +82,55 @@ def get_data_dir() -> Path:
         return Path(xdg_data) / "llm-monitor"
 
     return Path.home() / ".local" / "share" / "llm-monitor"
+
+
+def get_pid_dir() -> Path:
+    """Resolve the PID file directory.
+
+    Resolution order:
+    1. ``$XDG_RUNTIME_DIR/llm-monitor/``
+    2. ``/tmp/llm-monitor-<uid>/``
+    """
+    xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
+    if xdg_runtime:
+        return Path(xdg_runtime) / "llm-monitor"
+
+    return Path(f"/tmp/llm-monitor-{os.getuid()}")
+
+
+def get_log_dir() -> Path:
+    """Resolve the daemon log directory.
+
+    Resolution order:
+    1. ``$XDG_STATE_HOME/llm-monitor/``
+    2. ``~/.local/state/llm-monitor/``
+    """
+    xdg_state = os.environ.get("XDG_STATE_HOME")
+    if xdg_state:
+        return Path(xdg_state) / "llm-monitor"
+
+    return Path.home() / ".local" / "state" / "llm-monitor"
+
+
+def get_pid_file(config: dict) -> Path:
+    """Resolve the daemon PID file path from config or default."""
+    custom = config.get("daemon", {}).get("pid_file", "")
+    if custom:
+        return Path(custom)
+    return get_pid_dir() / "daemon.pid"
+
+
+def get_log_file(config: dict) -> Path:
+    """Resolve the daemon log file path from config or default."""
+    custom = config.get("daemon", {}).get("log_file", "")
+    if custom:
+        return Path(custom)
+    return get_log_dir() / "daemon.log"
+
+
+def get_state_file(config: dict) -> Path:
+    """Resolve the daemon state file path (always derived, not configurable)."""
+    return get_pid_dir() / "daemon.state"
 
 
 def get_cache_dir() -> Path:

@@ -8,7 +8,7 @@ from abc import ABC, abstractmethod
 import httpx
 
 from llm_monitor.models import CredentialError, ProviderStatus, SecretStr
-from llm_monitor.security import run_key_command
+from llm_monitor.security import is_container_mode, run_key_command
 
 
 class Provider(ABC):
@@ -77,17 +77,18 @@ class Provider(ABC):
             if value:
                 return SecretStr(value)
 
-        # Tier 3: keyring
-        try:
-            import keyring as kr
+        # Tier 3: keyring (skip in container mode — no D-Bus Secret Service)
+        if not is_container_mode():
+            try:
+                import keyring as kr
 
-            service = f"llm-monitor/{self.name()}"
-            secret = kr.get_password(service, "api_key")
-            if secret:
-                return SecretStr(secret)
-        except Exception:
-            # keyring not available or failed — fall through
-            pass
+                service = f"llm-monitor/{self.name()}"
+                secret = kr.get_password(service, "api_key")
+                if secret:
+                    return SecretStr(secret)
+            except Exception:
+                # keyring not available or failed — fall through
+                pass
 
         # Tier 4: nothing found
         return None
