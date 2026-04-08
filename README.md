@@ -157,6 +157,9 @@ Credentials are **never stored in the config file**. Resolution order:
 | Flag | Short | Description |
 |------|-------|-------------|
 | `--now` | | Human-readable table output |
+| `--monitor` | | Launch persistent Rich Live TUI |
+| `--compact` | | Single-line per provider (`--monitor` only) |
+| `--interval` | `-i` | UI refresh interval in seconds (`--monitor` only, default 30) |
 | `--provider` | `-p` | Filter providers (comma-separated) |
 | `--fresh` | `-f` | Bypass cache, force API call |
 | `--verbose` | `-v` | Verbose logging to stderr |
@@ -284,6 +287,60 @@ poll_interval = 60           # per-provider override (local services can poll fa
 
 **PID file:** `$XDG_RUNTIME_DIR/llm-monitor/daemon.pid` (or `/tmp/llm-monitor-<uid>/daemon.pid`)
 **Log file:** `$XDG_STATE_HOME/llm-monitor/daemon.log` (or `~/.local/state/llm-monitor/daemon.log`)
+
+## Monitor Mode
+
+Launch a persistent Rich Live dashboard that auto-refreshes and displays all configured providers.
+
+```bash
+# Full dashboard
+llm-monitor --monitor
+
+# Monitor a specific provider
+llm-monitor --monitor --provider claude
+
+# Compact mode (single line per provider, ideal for tmux)
+llm-monitor --monitor --compact
+
+# Custom refresh interval (default 30s, minimum 5s)
+llm-monitor --monitor --interval 10
+```
+
+When the daemon is running, `--monitor` reads from the history database (no API calls). Without a daemon, it fetches directly from providers on each refresh cycle.
+
+### Key Bindings
+
+| Key | Action |
+|-----|--------|
+| `r` | Force refresh all providers |
+| `1-9` | Force refresh provider by index |
+| `q` | Quit |
+| `j` | Dump current state as JSON to file |
+| `?` | Show/dismiss help overlay |
+
+### Display Features
+
+- Progress bars with status colour transitions (green/yellow/red/magenta)
+- Live countdown timers for usage window resets
+- Sparkline history (last 24 hours, hourly resolution)
+- Provider health indicators: green `●` = healthy, yellow `●` = stale, red `●` = error
+- Daemon status indicator (running/standalone, last poll time)
+
+### Signals
+
+| Signal | Action |
+|--------|--------|
+| `SIGUSR1` | Force refresh all providers |
+| `SIGHUP` | Reload configuration |
+| `SIGINT`/`SIGTERM` | Clean shutdown |
+
+### Configuration
+
+```toml
+[monitor]
+compact = false           # default to compact mode
+show_sparkline = true     # show usage sparklines from history
+```
 
 ## Docker
 
