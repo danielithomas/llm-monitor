@@ -756,21 +756,22 @@ llm-monitor --monitor --compact    # single-line per provider for tmux
 **Data source:** When the daemon is running, `--monitor` reads from the history database (no direct API calls). This makes the TUI a lightweight display-only process. When no daemon is running, `--monitor` fetches directly from providers on each refresh cycle (standalone behaviour).
 
 **Features:**
-- Auto-refresh display at configurable interval (default 30s UI refresh, data freshness depends on daemon poll interval).
-- Live countdown timers for reset windows.
-- Status colour transitions as utilisation changes.
-- Compact single-line mode via `--compact` for tmux/polybar/waybar embedding.
+- Auto-refresh display at configurable interval (`--interval`, default 30s, minimum 5s — see D-049). Data freshness depends on daemon poll interval.
+- Live countdown timers for reset windows (reuses `format_resets_in_human()` from `json_fmt.py`).
+- Status colour transitions as utilisation changes (reuses `_STATUS_COLOURS` from `table_fmt.py`).
+- Sparkline visualisation per usage window from history data — 24 hourly data points using `▁▂▃▄▅▆▇█`, suppressed if < 3 data points (D-046). Controlled by `[monitor] show_sparkline` config.
+- Compact single-line mode via `--compact` (D-045): one line per provider, format `● <name>  <bar> <pct>%  resets <time>`, bar width 10 chars. `--compact` is `--monitor`-only.
 - Rate-limit backoff indicator per provider (when in standalone mode).
-- Desktop notification on status transitions (configurable via `--notify`).
-- Provider health indicators (green dot = connected, yellow = stale, red = error).
+- Desktop notification on status transitions deferred to v0.9.0 (D-051).
+- Provider health indicators based on data age vs poll_interval (D-050): green `●` ≤ 1×, yellow `●` ≤ 3×, red `●` > 3× or errors.
 - Daemon status indicator (shows whether daemon is running and last poll time).
 
 **Key bindings:**
 - `r` - Force refresh all providers (bypass cache).
 - `1-9` - Force refresh specific provider by index.
 - `q` - Quit.
-- `j` - Dump current state as JSON to file.
-- `?` - Show help overlay.
+- `j` - Dump current state as JSON to `./llm-monitor-<YYYYMMDD-HHMMSS>.json` (D-048). Status message in footer for 3s.
+- `?` - Show help overlay (D-047). Rich Panel with keybinding list, dismissed on any keypress.
 
 #### 4.2.6 GTK/GNOME Mode (`--ux`) [v2]
 
@@ -1847,7 +1848,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | OQ-004 | **What is the actual rate limit on the Claude usage endpoint?** No documentation exists. Empirical testing needed. | Medium | Claude | Open |
 | OQ-005 | **Multi-account support?** Should the tool support multiple credentials per provider (e.g., work vs personal Claude accounts)? | Low (v1) | All | Open |
 | OQ-006 | **Claude plan detection?** The usage endpoint doesn't return plan type (Pro, Max5, Max20). Infer from thresholds or require user config? | Low | Claude | Open |
-| OQ-007 | **Tmux/status-bar integration format?** A `--compact` single-line output could feed tmux `status-right`, polybar, waybar. What format is most useful? | Low (v1) | Output | Open |
+| ~~OQ-007~~ | ~~**Tmux/status-bar integration format?** A `--compact` single-line output could feed tmux `status-right`, polybar, waybar. What format is most useful?~~ | ~~Low (v1)~~ | ~~Output~~ | **Closed (D-045):** `--compact` is a `--monitor`-only modifier rendering one plain-text line per provider. Tmux polling uses `--now` with external formatting. No JSON waybar variant in v0.4.0. |
 | OQ-008 | **What does `utilization > 100` look like in Claude's API?** Does it exceed 100 when using extra usage, or cap at 100 with a separate indicator? | Medium | Claude | Open |
 | OQ-009 | **GTK4 vs GTK3 for v2?** GTK4 + libadwaita is modern GNOME, but AppIndicator3 is GTK3. May need bridging or alternative tray approach. | Medium (v2) | GTK | Open |
 | ~~OQ-010~~ | ~~**Licensing?** MIT vs GPL. MIT is simpler; GPL aligns with GNOME ecosystem.~~ | ~~Low~~ | ~~All~~ | **Closed:** MIT license committed to repo. `pyproject.toml` updated accordingly. |
@@ -1941,6 +1942,13 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-042 | **Environment variable overrides for all XDG paths.** | `LLM_MONITOR_CONFIG`, `LLM_MONITOR_DATA_DIR`, `LLM_MONITOR_CACHE_DIR` override defaults. Essential for Docker (where XDG dirs may not exist) and for CI/test environments. | 2026-04-06 | Accepted |
 | D-043 | **Report aggregation: mean(utilisation), max-severity(status), last(counters), max(tokens/cost).** | Fields have different semantics: utilisation is a gauge (mean is correct), status is a severity level (worst-case matters), raw_value/raw_limit/resets_at are point-in-time state (last is authoritative), tokens/cost are running totals within a provider window (max captures the high-water mark without double-counting). Delta-based analysis deferred to v1.x. | 2026-04-07 | Accepted |
 | D-044 | **Export uses two logical record types with `type` discriminator.** | `usage_samples` and `model_usage` have different cardinality and schemas. Merging into one row with NULLs everywhere is messy. JSONL uses a `type` field per line (`usage_sample`, `model_usage`, `provider_extras`). CSV uses two sections with separate header rows (extras omitted — JSON blobs don't map to flat columns). SQL includes all tables. Export is always a complete dump with no filtering flags. | 2026-04-07 | Accepted |
+| D-045 | **`--compact` is a `--monitor`-only modifier, plain text, one line per provider.** | Format: `● <name>  <bar> <pct>%  resets <time>` where `●` is the health indicator dot (coloured). Bar width = 10 chars. No JSON variant in v0.4.0 — tmux polling uses `--now` piped through external formatting. Closes OQ-007 for v0.4.0 scope. | 2026-04-08 | Accepted |
+| D-046 | **Sparklines: 24 hourly data points, Unicode block characters, min-max linear mapping.** | Source: `aggregate_samples(granularity="hourly")` filtered to last 24h. Characters: `▁▂▃▄▅▆▇█` mapped linearly across the min-max range. Suppressed if fewer than 3 data points exist (not enough to be meaningful). One sparkline per usage window, displayed after the progress bar. | 2026-04-08 | Accepted |
+| D-047 | **`?` help overlay: Rich Panel with keybindings, dismissed on any keypress.** | A `rich.panel.Panel` centred in the display listing all keybindings (one per line), with a "Press any key to dismiss" footer. Replaces the main content in the Live display until a key is pressed. Minimal, no over-engineering. | 2026-04-08 | Accepted |
+| D-048 | **`j` dumps JSON snapshot to current working directory.** | Writes same schema as `llm-monitor` default output to `./llm-monitor-<YYYYMMDD-HHMMSS>.json`. A brief status message appears in the TUI footer for 3 seconds. On write failure (permissions), show error in footer instead. | 2026-04-08 | Accepted |
+| D-049 | **`--interval`/`-i` flag: integer seconds, default 30, minimum 5.** | Only meaningful with `--monitor` — controls UI refresh rate. Minimum 5 seconds prevents accidental API hammering in standalone mode. Values < 5 clamped to 5 with a stderr warning. | 2026-04-08 | Accepted |
+| D-050 | **Provider health indicator thresholds based on poll_interval multiples.** | Green `●` = data age ≤ 1× poll_interval (healthy). Yellow `●` = data age > 1× but ≤ 3× poll_interval (stale — daemon may have missed a cycle). Red `●` = data age > 3× poll_interval OR provider has errors. poll_interval read from config (default 600s, per-provider override respected). | 2026-04-08 | Accepted |
+| D-051 | **`--notify` deferred to v0.9.0. No flag added in v0.4.0.** | The spec's roadmap places notifications at v0.9.0. Adding a dead flag creates confusion. Desktop notification support arrives with the notification engine. | 2026-04-08 | Accepted |
 
 ---
 
@@ -2071,32 +2079,59 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 **Goal:** Live dashboard with auto-refresh and sparklines.
 
 **Core:**
-- [ ] Rich Live TUI (`--monitor`)
-- [ ] TTY requirement check (refuse if not interactive)
-- [ ] TUI reads from history DB when daemon is running (display-only, no API calls)
-- [ ] TUI fetches directly in standalone mode (no daemon)
-- [ ] Live countdown timers for reset windows
-- [ ] Status colour transitions as utilisation changes
-- [ ] Key bindings (r, 1-9, q, j, ?)
-- [ ] Rate-limit backoff indicator (standalone mode)
-- [ ] `--compact` single-line mode for tmux/polybar/waybar
-- [ ] Provider health indicators (connected/stale/error)
-- [ ] Daemon status indicator (running, last poll time)
-- [ ] SIGUSR1 force refresh
-- [ ] Terminal state restoration (cursor, alternate screen) via atexit
-- [ ] Sparkline visualisation from history database
+- [x] Rich Live TUI (`--monitor`)
+- [x] TTY requirement check (refuse if not interactive)
+- [x] TUI reads from history DB when daemon is running (display-only, no API calls)
+- [x] TUI fetches directly in standalone mode (no daemon)
+- [x] Live countdown timers for reset windows
+- [x] Status colour transitions as utilisation changes
+- [x] Key bindings (r, 1-9, q, j, ?)
+- [x] Rate-limit backoff indicator (standalone mode)
+- [x] `--compact` single-line mode for tmux/polybar/waybar
+- [x] Provider health indicators (connected/stale/error)
+- [x] Daemon status indicator (running, last poll time)
+- [x] SIGUSR1 force refresh
+- [x] Terminal state restoration (cursor, alternate screen) via atexit
+- [x] Sparkline visualisation from history database
 
 **Tests:**
-- [ ] `test_formatters/test_monitor_fmt.py` — TUI renders without crash with sample ProviderStatus data
-- [ ] `test_formatters/test_monitor_fmt.py` — compact mode produces single-line output per provider
-- [ ] `test_formatters/test_monitor_fmt.py` — colour transitions: normal (green), warning (yellow), critical (red), exceeded (magenta)
-- [ ] `test_formatters/test_monitor_fmt.py` — countdown timer formatting (hours+minutes, days+hours)
-- [ ] `test_formatters/test_monitor_fmt.py` — sparkline rendering from history data (empty history → no sparkline, sufficient data → correct bar characters)
-- [ ] `test_cli.py` additions — `--monitor` without TTY → error exit, `--monitor` with `--compact` accepted
-- [ ] `test_cli.py` additions — SIGUSR1 triggers refresh in monitor mode (signal handler test)
+- [x] `test_formatters/test_monitor_fmt.py` — TUI renders without crash with sample ProviderStatus data
+- [x] `test_formatters/test_monitor_fmt.py` — compact mode produces single-line output per provider
+- [x] `test_formatters/test_monitor_fmt.py` — colour transitions: normal (green), warning (yellow), critical (red), exceeded (magenta)
+- [x] `test_formatters/test_monitor_fmt.py` — countdown timer formatting (hours+minutes, days+hours)
+- [x] `test_formatters/test_monitor_fmt.py` — sparkline rendering from history data (empty history → no sparkline, sufficient data → correct bar characters)
+- [x] `test_cli.py` additions — `--monitor` without TTY → error exit, `--monitor` with `--compact` accepted
+- [x] `test_cli.py` additions — SIGUSR1 triggers refresh in monitor mode (signal handler test)
 
 **Documentation:**
-- [ ] README.md update — add monitor mode section: `--monitor` usage, key bindings table, `--compact` mode for tmux/waybar, screenshot or example output, daemon integration (reads from DB when daemon running)
+- [x] README.md update — add monitor mode section: `--monitor` usage, key bindings table, `--compact` mode for tmux/waybar, screenshot or example output, daemon integration (reads from DB when daemon running)
+
+**Implementation notes:**
+
+*New files:*
+- `src/llm_monitor/formatters/monitor_fmt.py` — Rich Live TUI renderer. Uses `rich.live.Live` with `Screen()` layout. Contains: `MonitorDisplay` class (manages layout, refresh, key handling), sparkline renderer, compact-line formatter, help overlay panel.
+- `tests/formatters/test_monitor_fmt.py` — TUI formatter unit tests.
+
+*Modified files:*
+- `cli.py` — Add `--monitor`, `--compact`, `--interval` flags to the `status` command. Wire up TTY check, monitor launch, and SIGUSR1 handler. `--compact` and `--interval` are silently ignored without `--monitor`.
+- `formatters/__init__.py` — Export new formatter.
+
+*Existing code reused:*
+- `_STATUS_COLOURS` dict from `table_fmt.py` — extract to a shared location or import directly.
+- `format_resets_in_human()` from `json_fmt.py` — countdown timer formatting.
+- `HistoryStore.get_latest_statuses()` — data source when daemon is running.
+- `HistoryStore.aggregate_samples(granularity="hourly")` — sparkline data source.
+- `is_daemon_running()` from `daemon.py` — daemon detection for data source selection.
+- `fetch_all()` from `core.py` — standalone mode direct fetching.
+- `_resolve_colour()` from `cli.py` — colour detection.
+
+*Implementation phasing:*
+1. Core TUI formatter + CLI wiring: `monitor_fmt.py` with `MonitorDisplay`, status command gets `--monitor` flag, TTY check, refresh loop, provider panels with progress bars + countdown timers + colour transitions, `q`/Ctrl+C exit, terminal state restoration, daemon-aware data source.
+2. Interactivity + indicators: key bindings (`r`, `1-9`, `j`, `?`), provider health indicators (D-050), daemon status indicator (header), SIGUSR1 handler, rate-limit backoff indicator.
+3. Sparklines + compact mode: sparkline rendering (D-046), `--compact` single-line mode (D-045), `[monitor]` config section reading.
+4. Tests + documentation: all test cases from checklist, README.md update.
+
+*Key design decisions:* D-045 (compact format), D-046 (sparklines), D-047 (help overlay), D-048 (JSON dump), D-049 (interval flag), D-050 (health thresholds), D-051 (notify deferred).
 
 ### v0.5.0 - Grok Provider
 

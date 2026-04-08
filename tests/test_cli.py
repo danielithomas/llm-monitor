@@ -619,3 +619,35 @@ class TestFreshFlag:
         result2 = runner.invoke(cli, ["--provider", "claude", "--fresh"])
         assert result2.exit_code == 0
         assert route.call_count == 2
+
+
+# ---------------------------------------------------------------------------
+# CLI: --monitor flag
+# ---------------------------------------------------------------------------
+
+
+class TestMonitorFlag:
+    def test_monitor_without_tty_exits_error(self):
+        """--monitor should refuse to start when stdout is not a TTY."""
+        runner = CliRunner()
+        # CliRunner does not provide a TTY, so this should fail
+        result = runner.invoke(cli, ["--monitor"])
+        assert result.exit_code == 1
+        assert "interactive terminal" in result.output
+
+    def test_monitor_with_compact_accepted(self):
+        """--monitor --compact should be accepted (same TTY error, but the
+        flag combination itself is valid)."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["--monitor", "--compact"])
+        assert result.exit_code == 1
+        assert "interactive terminal" in result.output
+
+    def test_monitor_help_shows_flag(self):
+        """--monitor should appear in --help output."""
+        runner = CliRunner()
+        result = runner.invoke(cli, ["status", "--help"])
+        assert result.exit_code == 0
+        assert "--monitor" in result.output
+        assert "--compact" in result.output
+        assert "--interval" in result.output

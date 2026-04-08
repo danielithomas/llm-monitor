@@ -133,6 +133,9 @@ def cli(ctx: click.Context, version: bool) -> None:
 
 @cli.command()
 @click.option("--now", is_flag=True, default=False, help="Display table output.")
+@click.option("--monitor", is_flag=True, default=False, help="Launch persistent Rich Live TUI.")
+@click.option("--compact", is_flag=True, default=False, help="Single-line per provider (--monitor only).")
+@click.option("--interval", "-i", default=30, type=int, help="UI refresh interval in seconds (--monitor only).")
 @click.option(
     "--provider", "-p", default=None,
     help="Comma-separated list of providers to query.",
@@ -176,6 +179,9 @@ def cli(ctx: click.Context, version: bool) -> None:
 )
 def status(
     now: bool,
+    monitor: bool,
+    compact: bool,
+    interval: int,
     provider: str | None,
     fresh: bool,
     verbose: bool,
@@ -215,6 +221,81 @@ def status(
             err=True,
         )
         sys.exit(1)
+
+    # --monitor: launch Rich Live TUI
+    if monitor:
+        # TTY check — refuse if not interactive
+        if not sys.stdout.isatty():
+            click.echo(
+                "Error: --monitor requires an interactive terminal.\n"
+                "Fix: Run in a terminal emulator, not piped.",
+                err=True,
+            )
+            sys.exit(1)
+
+        # Clamp interval to minimum 5s (D-049)
+        if interval < 5:
+            click.echo(
+                f"Warning: --interval {interval}s too low, clamping to 5s.",
+                err=True,
+            )
+            interval = 5
+
+        use_colour = _resolve_colour(no_colour, colour)
+        provider_filter_list = (
+            [p.strip() for p in provider.split(",")]
+            if provider else None
+        )
+
+        # Build a standalone fetch function for when daemon is not running
+        def _standalone_fetch() -> list:
+            from llm_monitor.models import ProviderStatus as _PS
+
+            if provider:
+                requested = [p.strip() for p in provider.split(",")]
+                pcls = []
+                for name in requested:
+                    if name in PROVIDERS:
+                        pcls.append(PROVIDERS[name])
+            else:
+                pcls = get_enabled_providers(config)
+
+            instances = []
+            for cls in pcls:
+                try:
+                    instances.append(cls(config))
+                except Exception:
+                    pass
+
+            cache_dir = get_cache_dir()
+            cache = ProviderCache(cache_dir)
+            statuses = asyncio.run(
+                fetch_all(instances, cache, config, fresh=fresh)
+            )
+
+            # Record to history
+            history = _open_history(config, no_history)
+            if history is not None:
+                try:
+                    for s in statuses:
+                        history.record(s)
+                finally:
+                    history.close()
+
+            return statuses
+
+        from llm_monitor.formatters.monitor_fmt import MonitorRunner
+
+        runner = MonitorRunner(
+            config=config,
+            provider_filter=provider_filter_list,
+            compact=compact,
+            interval=interval,
+            colour=use_colour,
+            fetch_fn=_standalone_fetch,
+        )
+        runner.run()
+        return
 
     # If --report, delegate to report logic
     if report:
