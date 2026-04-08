@@ -1,0 +1,31 @@
+{
+  "timeSeries": [
+    {
+      "group": ["grok-3"],
+      "groupLabels": ["grok-3"],
+      "dataPoints": [
+        { "timestamp": "2026-04-01T00:00:00Z", "values": [3.25] },
+        { "timestamp": "2026-04-02T00:00:00Z", "values": [5.10] },
+        { "timestamp": "2026-04-03T00:00:00Z", "values": [2.80] },
+        { "timestamp": "2026-04-04T00:00:00Z", "values": [4.50] },
+        { "timestamp": "2026-04-05T00:00:00Z", "values": [1.20] },
+        { "timestamp": "2026-04-06T00:00:00Z", "values": [0.00] },
+        { "timestamp": "2026-04-07T00:00:00Z", "values": [6.30] }
+      ]
+    },
+    {
+      "group": ["grok-3-mini"],
+      "groupLabels": ["grok-3-mini"],
+      "dataPoints": [
+        { "timestamp": "2026-04-01T00:00:00Z", "values": [0.50] },
+        { "timestamp": "2026-04-02T00:00:00Z", "values": [0.75] },
+        { "timestamp": "2026-04-03T00:00:00Z", "values": [0.30] },
+        { "timestamp": "2026-04-04T00:00:00Z", "values": [0.60] },
+        { "timestamp": "2026-04-05T00:00:00Z", "values": [0.40] },
+        { "timestamp": "2026-04-06T00:00:00Z", "values": [0.00] },
+        { "timestamp": "2026-04-07T00:00:00Z", "values": [0.95] }
+      ]
+    }
+  ],
+  "limitReached": false
+}

@@ -24,7 +24,7 @@ REDACTION_PATTERNS: list[re.Pattern[str]] = [
     re.compile(r"sk-ant-api\S+"),          # Anthropic API key
     re.compile(r"sk-ant-admin\S+"),        # Anthropic Admin API key
     re.compile(r"sk-[a-zA-Z0-9-]{20,}"),   # OpenAI API key
-    re.compile(r"xai-[a-zA-Z0-9-]{20,}"),  # xAI API key
+    re.compile(r"xai-[a-zA-Z0-9-]{20,}"),  # xAI API key / management key
     re.compile(r"Bearer\s+\S+"),           # Any bearer token in logs
 ]
 
