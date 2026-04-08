@@ -394,36 +394,55 @@ The backoff state is persisted in the provider's cache file so it survives proce
 
 ---
 
-### 3.2 Grok (xAI) - v0.3.0
+### 3.2 Grok (xAI) - v0.5.0
 
-**Type:** API credit/spend monitoring + rate limit tracking
+**Type:** API spend monitoring + prepaid balance tracking + usage analytics
 
-**Data source:** xAI Console API (API key based)
+**Data sources:**
+- **xAI Management API** (`management-api.x.ai`) — billing, spend, usage analytics, prepaid balance. Requires a Management Key (separate from API key) and a team ID.
+- **xAI Inference API** (`api.x.ai`) — rate limit headers on chat completion responses (optional, supplementary).
 
 **Authentication:**
-- Standard API key from xAI Console, resolved via `resolve_credential()` (keyring, env var, or key_command).
-- Default env var: `$XAI_API_KEY`.
+- **Management Key** (primary): from xAI Console → Management Keys. Resolved via `resolve_credential()` (keyring, env var, or key_command). Default env var: `$XAI_MANAGEMENT_KEY`. Required for billing/usage data.
+- **API Key** (optional): standard API key for rate limit header data. Default env var: `$XAI_API_KEY`. Not required if management key is present.
+- **Team ID** (required): `team_id` config field in `[providers.grok]`. Available from xAI Console. Can also be set via `$XAI_TEAM_ID` env var.
 
-**Available metrics:**
+**Available endpoints (Management API — `management-api.x.ai`):**
 
-| Metric | Source | Notes |
-|--------|--------|-------|
-| Rate limit remaining | Response headers (`x-ratelimit-remaining-requests`, `x-ratelimit-reset-requests`) | Per-request, needs aggregation |
-| Token consumption | Response `usage` object (`prompt_tokens`, `completion_tokens`, `total_tokens`) | Per-request |
-| Spend/billing | xAI Console dashboard | No known programmatic API for balance/spend |
+| Endpoint | Method | Data | Notes |
+|----------|--------|------|-------|
+| `/v1/billing/teams/{team_id}/postpaid/invoice/preview` | GET | Per-model line items (token counts, unit prices, amounts), MTD totals, prepaid credits used | Primary spend data source |
+| `/v1/billing/teams/{team_id}/postpaid/spending-limits` | GET | Hard/soft spending limits in USD cents | Used to derive spend-vs-limit percentage |
+| `/v1/billing/teams/{team_id}/prepaid/balance` | GET | Prepaid credit purchase/spend history, current total in USD cents | Prepaid balance window |
+| `/v1/billing/teams/{team_id}/usage` | POST | Time-series usage analytics with model grouping, cost in USD | Per-model breakdown, sparkline data |
+| `/v1/api-key` | GET | Key status (active/blocked/disabled), team ID, ACLs | Health check (uses `api.x.ai`, not management API) |
 
-**Mapped usage windows (planned):**
+**Available data (Inference API — `api.x.ai`, chat completion responses only):**
+
+| Data | Source | Notes |
+|------|--------|-------|
+| Rate limit (requests) | `x-ratelimit-limit-requests`, `x-ratelimit-remaining-requests` headers | Only present on `/v1/chat/completions` responses |
+| Rate limit (tokens) | `x-ratelimit-limit-tokens`, `x-ratelimit-remaining-tokens` headers | Only present on `/v1/chat/completions` responses |
+| Per-request cost | `usage.cost_in_usd_ticks` in response body (1 tick = 1/10,000,000,000 USD) | Per-request only |
+| Per-request tokens | `usage.prompt_tokens`, `usage.completion_tokens`, `usage.total_tokens` with detailed breakdowns | Includes reasoning, cached, audio, image token splits |
+
+**Mapped usage windows:**
 
 | Window | Source | Unit | Notes |
 |--------|--------|------|-------|
-| Rate Limit (daily) | Response headers | percent | Derived from remaining/limit |
-| Spend (MTD) | Console API or scrape | usd | Availability TBD |
+| Spend (MTD) | Invoice preview `totalWithCorr` | usd | Month-to-date spend in current billing cycle |
+| Spend vs Limit | Invoice preview spend / spending limits `effectiveHardSl` | percent | Percentage of hard spending limit consumed |
+| Prepaid Balance | Prepaid balance `total` | usd | Remaining prepaid credits |
 
-**Open question:** xAI does not appear to have a dedicated usage/billing REST API comparable to OpenAI's. The xAI Console shows spend, but programmatic access may require scraping or an undocumented endpoint. See OQ-011.
+**Per-model breakdown:** The invoice preview endpoint returns per-model line items with token counts, unit prices, and amounts. The usage analytics endpoint supports `groupBy: ["description"]` for per-model time-series data in USD. The provider populates `model_usage` entries from the invoice preview (current cycle) and can use the usage analytics endpoint for historical sparkline data.
 
-**Per-model breakdown:** Rate limit headers are per-model (each Grok model has its own limits). The `usage` object in API responses includes per-request token counts tagged by model. The provider aggregates these into `model_usage` entries when available.
+**Extras dict:** `{ "billing_cycle": { "year": ..., "month": ... }, "tier": "...", "models_used": [...] }`
 
-**Allowed hosts:** `api.x.ai` (HTTPS only).
+**Cost unit:** The Management API returns costs in USD cents (integer `val` field). The Inference API returns `cost_in_usd_ticks` where 1 tick = 1/10,000,000,000 USD. The provider normalises both to USD floats for `UsageWindow.raw_value`.
+
+**Rate limit tiers:** xAI uses 5 spending-based tiers (Tier 0–4, based on cumulative spend since 2026-01-01) plus Enterprise. Each tier sets per-model RPM and TPM limits. Actual limits are visible at `console.x.ai/team/default/rate-limits` but not programmatically queryable.
+
+**Allowed hosts:** `management-api.x.ai`, `api.x.ai` (HTTPS only).
 
 ---
 
@@ -725,8 +744,8 @@ LLM Monitor                               05 Apr 2026, 10:30 AEST
 
  xAI Grok                                  fresh
 ───────────────────────────────────────────────────────────────────
- Rate Limit     ████░░░░░░░░░░░░░░░░  22%    resets in 18h
- Spend (MTD)    ██████░░░░░░░░░░░░░░  $12.40 / $50.00
+ Spend (MTD)    ██████░░░░░░░░░░░░░░  $24.88 / $500.00  (5%)
+ Prepaid Bal.   $95.93 remaining
 
  Ollama (local)                             live
 ───────────────────────────────────────────────────────────────────
@@ -991,7 +1010,12 @@ show_opus = true
 # ─── Provider: Grok (xAI) ─────────────────────────────────────
 [providers.grok]
 enabled = false
-key_env = "XAI_API_KEY"
+team_id = ""                     # required: xAI team ID (or set $XAI_TEAM_ID)
+# Management key (primary — billing, usage, spend data)
+management_key_env = "XAI_MANAGEMENT_KEY"
+# management_key_command = "secret-tool lookup application llm-monitor provider grok-management"
+# API key (optional — rate limit header data from inference API)
+# key_env = "XAI_API_KEY"
 # key_command = "secret-tool lookup application llm-monitor provider grok"
 # key_keyring = true             # use system keyring (default: true)
 
@@ -1416,6 +1440,8 @@ Standard practice for CI/CD and containerised environments. Acknowledged risk: r
 ```bash
 export OPENAI_API_KEY="sk-..."
 export XAI_API_KEY="xai-..."
+export XAI_MANAGEMENT_KEY="xai-mgmt-..."
+export XAI_TEAM_ID="..."
 ```
 
 **Tier 4: Claude Code credential file (Claude provider only)**
@@ -1507,7 +1533,7 @@ Use `fcntl.flock()` (advisory locking) when reading/writing cache files to preve
 |----------|--------------|--------|
 | Claude | `api.anthropic.com` | HTTPS only |
 | OpenAI | `api.openai.com` | HTTPS only |
-| Grok | `api.x.ai` | HTTPS only |
+| Grok | `management-api.x.ai`, `api.x.ai` | HTTPS only |
 | Ollama | `localhost`, `127.0.0.1`, `[::1]`, or user-configured host | HTTP or HTTPS |
 
 ### 7.6 Process Security
@@ -1852,7 +1878,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | OQ-008 | **What does `utilization > 100` look like in Claude's API?** Does it exceed 100 when using extra usage, or cap at 100 with a separate indicator? | Medium | Claude | Open |
 | OQ-009 | **GTK4 vs GTK3 for v2?** GTK4 + libadwaita is modern GNOME, but AppIndicator3 is GTK3. May need bridging or alternative tray approach. | Medium (v2) | GTK | Open |
 | ~~OQ-010~~ | ~~**Licensing?** MIT vs GPL. MIT is simpler; GPL aligns with GNOME ecosystem.~~ | ~~Low~~ | ~~All~~ | **Closed:** MIT license committed to repo. `pyproject.toml` updated accordingly. |
-| OQ-011 | **Does xAI have a programmatic billing/usage API?** Console shows spend, but no documented REST endpoint for querying balance or MTD cost found. Rate limit headers provide per-request data only. | High | Grok | Open |
+| ~~OQ-011~~ | ~~**Does xAI have a programmatic billing/usage API?** Console shows spend, but no documented REST endpoint for querying balance or MTD cost found. Rate limit headers provide per-request data only.~~ | ~~High~~ | ~~Grok~~ | **Closed:** Yes. The xAI Management API (`management-api.x.ai`) provides full billing, spend, usage analytics, prepaid balance, and spending limit endpoints. Requires a separate Management Key (not the inference API key) and team ID. See updated Section 3.2. |
 | OQ-012 | **OpenAI billing endpoint stability?** `/v1/dashboard/billing/subscription` and `/v1/dashboard/billing/credit_grants` are undocumented but widely used. The official Usage API (`/v1/organization/usage/...`) requires admin-level access. | Medium | OpenAI | Open |
 | OQ-013 | **Ollama metrics endpoint availability?** Ollama does not have a built-in `/metrics` Prometheus endpoint in all versions. The proxy approach (ollama-metrics) is an alternative but adds a dependency. Should we support both paths? | Medium | Ollama | Open |
 | OQ-014 | **AMD GPU support depth?** `pyamdgpuinfo` is limited. `rocm-smi` subprocess parsing is more complete but slower. What level of AMD support is needed? | Low | Local | Open |
@@ -1884,7 +1910,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | A-007 | Ollama runs on `localhost:11434` by default and the `/api/ps` and `/api/tags` endpoints are stable. | Ollama API changes would require updates. These endpoints have been stable for 2+ years. | Ollama |
 | A-008 | NVIDIA GPU monitoring via `pynvml` works on Linux with standard NVIDIA drivers installed. | If driver mismatch, GPU metrics fail gracefully. | Local |
 | ~~A-009~~ | ~~Rate limiting on Claude's usage endpoint is per-token, not per-IP. Running alongside Claude Code's own polling won't cause mutual 429s.~~ | ~~If per-IP, concurrent polling could cause interference.~~ | ~~Claude~~ | *Superseded by D-004 (10m poll interval) and D-041 (exponential backoff). Design is now robust regardless of rate-limit scope.* |
-| A-010 | xAI's rate limit response headers (`x-ratelimit-remaining-requests`, etc.) are present and parseable on all Grok API responses. | If absent on some models/endpoints, rate limit window would show "unavailable". | Grok |
+| A-010 | xAI's rate limit response headers (`x-ratelimit-remaining-requests`, `x-ratelimit-remaining-tokens`, etc.) are present on `/v1/chat/completions` responses but NOT on `/v1/models` or Management API responses. Verified 2026-04-08. | Rate limit headers are supplementary only; primary data comes from the Management API. The provider works without them. | Grok |
 | ~~A-011~~ | ~~A D-Bus Secret Service daemon (GNOME Keyring, KDE Wallet, or equivalent) is running on the user's desktop session.~~ | ~~Keyring storage unavailable; fall back to env vars or `key_command`. Emit clear instructions.~~ | ~~Security~~ | *No longer load-bearing. Keyring is tier 3; env vars (tier 2) and key_command (tier 1) cover all cases. Docker mode (D-038) skips keyring entirely. The tool works fine without a keyring daemon.* |
 | A-012 | The user's home filesystem supports POSIX file permissions (not FAT32/NTFS mounted without proper mapping). | Permission checks would be meaningless. Detect and warn. | Security |
 | A-013 | In Docker deployments, credentials are provided via environment variables or mounted files. System keyring is not available. | Credential resolution falls through to env vars (tier 2). Document clearly in Docker setup instructions. | Docker |
@@ -2135,16 +2161,65 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 ### v0.5.0 - Grok Provider
 
-- [ ] xAI Grok provider implementation
-- [ ] Rate limit header parsing
-- [ ] Spend tracking (if API available, else deferred)
-- [ ] Config section for Grok
+- [ ] xAI Grok provider implementation (`providers/grok.py`)
+- [ ] Management API integration: invoice preview (MTD spend), spending limits, prepaid balance
+- [ ] Usage analytics integration: per-model time-series spend via `POST /v1/billing/teams/{team_id}/usage`
+- [ ] Dual credential support: management key (primary) + API key (optional)
+- [ ] Team ID resolution from config or `$XAI_TEAM_ID` env var
+- [ ] Config section for Grok in `config.py` DEFAULT_CONFIG
+- [ ] Provider registration in `providers/__init__.py`
+- [ ] Redaction pattern for management keys in `security.py`
 
 **Tests:**
-- [ ] `test_providers/test_grok.py` — successful response parsing, rate limit headers mapped to UsageWindow, credential resolution via `$XAI_API_KEY`, 429 handling with backoff, network error → cached data, mocked HTTP via `respx`
+- [ ] `test_providers/test_grok.py` — invoice preview response parsing into UsageWindow (spend MTD, spend vs limit, prepaid balance)
+- [ ] `test_providers/test_grok.py` — usage analytics response parsing into ModelUsage entries
+- [ ] `test_providers/test_grok.py` — spending limits response parsing (USD cents → USD float)
+- [ ] `test_providers/test_grok.py` — prepaid balance response parsing
+- [ ] `test_providers/test_grok.py` — management key credential resolution via `$XAI_MANAGEMENT_KEY`
+- [ ] `test_providers/test_grok.py` — team_id from config and from `$XAI_TEAM_ID` env var fallback
+- [ ] `test_providers/test_grok.py` — `is_configured()` requires management key + team_id
+- [ ] `test_providers/test_grok.py` — 401/403 handling (invalid management key)
+- [ ] `test_providers/test_grok.py` — 429 handling with backoff
+- [ ] `test_providers/test_grok.py` — network error → error in ProviderStatus
+- [ ] `test_providers/test_grok.py` — mocked HTTP via `respx` for all management API endpoints
 
 **Documentation:**
-- [ ] README.md update — add Grok to supported providers list, Grok credential setup (`$XAI_API_KEY`, keyring, key_command), Grok-specific config example, rate limit monitoring explanation
+- [ ] README.md update — add Grok to supported providers list, dual credential setup (`$XAI_MANAGEMENT_KEY` + optional `$XAI_API_KEY`), team ID configuration, Grok-specific config example, spending limit monitoring explanation
+
+**Implementation notes:**
+
+*New files:*
+- `src/llm_monitor/providers/grok.py` — Grok provider. Uses Management API (`management-api.x.ai`) as primary data source. Implements `Provider` ABC. Dual credential resolution: `management_key_env`/`management_key_command` for Management API, standard `key_env`/`key_command` for Inference API (optional). Team ID from config `team_id` field or `$XAI_TEAM_ID` env var.
+- `tests/providers/test_grok.py` — Grok provider unit tests with respx-mocked HTTP.
+- `tests/fixtures/grok_invoice_preview.json` — sample invoice preview response.
+- `tests/fixtures/grok_spending_limits.json` — sample spending limits response.
+- `tests/fixtures/grok_prepaid_balance.json` — sample prepaid balance response.
+- `tests/fixtures/grok_usage_analytics.json` — sample usage analytics response.
+
+*Modified files:*
+- `providers/__init__.py` — add `from llm_monitor.providers.grok import GrokProvider` import to trigger registration.
+- `config.py` — add `grok` section to `DEFAULT_CONFIG` with `enabled: False`, `team_id: ""`, `management_key_env: "XAI_MANAGEMENT_KEY"`.
+- `security.py` — add management key redaction pattern (if distinct from `xai-*` pattern).
+
+*Existing code reused:*
+- `Provider.resolve_credential()` — for both management key and API key resolution (called twice with different config keys).
+- `ProviderStatus`, `UsageWindow`, `ModelUsage` — all fields map naturally to Management API data.
+- `compute_status()` — for spend-vs-limit percentage thresholds.
+- `ProviderCache` / backoff — no changes needed, works generically.
+- All formatters (JSON, table, TUI) — work against `ProviderStatus` with no modifications.
+
+*Key design decisions:*
+- Management API is the primary data source. The provider is fully functional with only a management key + team ID. The inference API key is optional and supplementary (rate limit headers only).
+- USD cents from the Management API (integer `val` field) are normalised to USD floats (`val / 100`) for `UsageWindow.raw_value`.
+- The `cost_in_usd_ticks` field from inference responses (1 tick = 1/10,000,000,000 USD) is not used by the provider; the Management API provides aggregated cost data.
+- `team_id` is a required config field (not derived from the API key), because the Management API is team-scoped.
+- The usage analytics endpoint (`POST /v1/billing/teams/{team_id}/usage`) uses `timeUnit: TIME_UNIT_DAY` and `groupBy: ["description"]` for per-model daily spend. Time range defaults to current billing cycle (1st of month to now).
+
+*Implementation phasing:*
+1. Core provider + credential resolution: `grok.py` with `GrokProvider` class, dual credential resolution, `is_configured()`, `auth_instructions()`, provider registration, config section.
+2. Invoice preview + spending limits: `fetch_usage()` calls invoice preview and spending limits endpoints, maps to `UsageWindow` entries (Spend MTD, Spend vs Limit, Prepaid Balance).
+3. Usage analytics + per-model breakdown: usage analytics endpoint parsed into `ModelUsage` entries and `extras` dict.
+4. Tests + documentation: all test cases from checklist, fixture files, README update.
 
 ### v0.6.0 - OpenAI Provider
 
@@ -2289,6 +2364,8 @@ services:
       # Cloud provider API keys (alternative to keyring)
       - OPENAI_API_KEY=${OPENAI_API_KEY}
       - XAI_API_KEY=${XAI_API_KEY}
+      - XAI_MANAGEMENT_KEY=${XAI_MANAGEMENT_KEY}
+      - XAI_TEAM_ID=${XAI_TEAM_ID}
       # Override poll interval (optional)
       # - LLM_MONITOR_POLL_INTERVAL=600
 
@@ -2360,7 +2437,10 @@ Without a health endpoint, `daemon status` exit code (0 = running, non-zero = no
 | Source | URL |
 |--------|-----|
 | Consumption and rate limits | https://docs.x.ai/docs/key-information/consumption-and-rate-limits |
+| Rate limits (developer docs) | https://docs.x.ai/developers/rate-limits |
 | Models and pricing | https://docs.x.ai/developers/models |
+| Management API reference | https://docs.x.ai/developers/rest-api-reference/management |
+| Management API: Billing | https://docs.x.ai/developers/rest-api-reference/management/billing |
 
 ### OpenAI
 
