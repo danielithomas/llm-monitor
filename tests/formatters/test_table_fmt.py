@@ -117,6 +117,82 @@ class TestFormatTableContent:
         output = format_table([status], colour=False)
         assert "LLM Monitor" in output
 
+    def test_usd_window_shows_dollar_value(self) -> None:
+        window = UsageWindow(
+            name="Spend (MTD)",
+            utilisation=0.0,
+            resets_at=None,
+            status="normal",
+            unit="usd",
+            raw_value=1450.00,
+        )
+        status = ProviderStatus(
+            provider_name="grok",
+            provider_display="xAI Grok",
+            timestamp=datetime(2026, 4, 5, 10, 30, 0, tzinfo=timezone.utc),
+            cached=False,
+            cache_age_seconds=0,
+            windows=[window],
+        )
+        output = format_table([status], colour=False)
+        assert "$1,450.00" in output
+        assert "0%" not in output
+
+    def test_usd_window_no_progress_bar(self) -> None:
+        window = UsageWindow(
+            name="Prepaid Balance",
+            utilisation=0.0,
+            resets_at=None,
+            status="normal",
+            unit="usd",
+            raw_value=75.00,
+        )
+        status = ProviderStatus(
+            provider_name="grok",
+            provider_display="xAI Grok",
+            timestamp=datetime(2026, 4, 5, 10, 30, 0, tzinfo=timezone.utc),
+            cached=False,
+            cache_age_seconds=0,
+            windows=[window],
+        )
+        output = format_table([status], colour=False)
+        assert "$75.00" in output
+        # Should not contain filled bar characters
+        assert "\u2588" not in output
+        assert "#" not in output
+
+    def test_mixed_usd_and_percent_windows(self) -> None:
+        windows = [
+            UsageWindow(
+                name="Spend (MTD)",
+                utilisation=0.0,
+                resets_at=None,
+                status="normal",
+                unit="usd",
+                raw_value=1450.00,
+            ),
+            UsageWindow(
+                name="Spend vs Limit",
+                utilisation=29.0,
+                resets_at=None,
+                status="normal",
+                unit="percent",
+                raw_value=1450.00,
+                raw_limit=5000.00,
+            ),
+        ]
+        status = ProviderStatus(
+            provider_name="grok",
+            provider_display="xAI Grok",
+            timestamp=datetime(2026, 4, 5, 10, 30, 0, tzinfo=timezone.utc),
+            cached=False,
+            cache_age_seconds=0,
+            windows=windows,
+        )
+        output = format_table([status], colour=False)
+        assert "$1,450.00" in output
+        assert "29%" in output
+
     def test_cached_provider_shows_cache_info(self) -> None:
         status = ProviderStatus(
             provider_name="claude",

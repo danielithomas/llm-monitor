@@ -205,3 +205,7 @@ cython_debug/
 marimo/_static/
 marimo/_lsp/
 __marimo__/
+
+# Version py created by hatch-vcs
+src/llm_monitor/_version.py
+

@@ -34,6 +34,11 @@ DEFAULT_CONFIG: dict = {
             "credentials_path": "",
             "show_opus": True,
         },
+        "grok": {
+            "enabled": False,
+            "team_id": "",
+            "management_key_env": "XAI_MANAGEMENT_KEY",
+        },
     },
     "history": {
         "enabled": True,

@@ -48,13 +48,21 @@ def _format_cache_info(status: ProviderStatus) -> str:
     return f"cached {minutes}m ago"
 
 
-def _format_pct_and_reset(window: UsageWindow) -> str:
-    """Format the percentage and reset-time suffix for a window row."""
-    pct = f"{window.utilisation:.0f}%"
+def _format_value_and_reset(window: UsageWindow) -> str:
+    """Format the value and reset-time suffix for a window row.
+
+    For percentage windows, shows ``42%``.  For USD windows, shows
+    ``$1,450.00`` from ``raw_value``.
+    """
+    if window.unit == "usd":
+        val = window.raw_value or 0.0
+        formatted = f"${val:,.2f}"
+    else:
+        formatted = f"{window.utilisation:.0f}%"
     human = format_resets_in_human(window.resets_at)
     if human is not None:
-        return f"{pct}    resets in {human}"
-    return pct
+        return f"{formatted}    resets in {human}"
+    return formatted
 
 
 def format_table(
@@ -113,8 +121,11 @@ def format_table(
         # Window rows
         for window in status.windows:
             name_text = Text(f"  {window.name}")
-            bar = _build_bar(window.utilisation, window.status, colour)
-            info = _format_pct_and_reset(window)
+            if window.unit == "usd":
+                bar = Text(" " * _BAR_WIDTH)
+            else:
+                bar = _build_bar(window.utilisation, window.status, colour)
+            info = _format_value_and_reset(window)
 
             if colour:
                 style = _STATUS_COLOURS.get(window.status, "white")
