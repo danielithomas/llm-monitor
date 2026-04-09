@@ -39,3 +39,4 @@ def get_enabled_providers(config: dict) -> list[type[Provider]]:
 
 # Import concrete providers to trigger registration
 from llm_monitor.providers.claude import ClaudeProvider  # noqa: E402, F401
+from llm_monitor.providers.openai import OpenAIProvider  # noqa: E402, F401

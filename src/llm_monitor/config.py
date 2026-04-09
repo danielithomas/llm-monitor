@@ -34,6 +34,10 @@ DEFAULT_CONFIG: dict = {
             "credentials_path": "",
             "show_opus": True,
         },
+        "openai": {
+            "enabled": False,
+            "admin_key_env": "OPENAI_ADMIN_KEY",
+        },
     },
     "history": {
         "enabled": True,
