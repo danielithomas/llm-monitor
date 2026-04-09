@@ -5,6 +5,23 @@ All notable changes to llm-monitor are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2026-04-10
+
+### Added
+
+- **OpenAI provider** (`providers/openai.py`) — organisation-level spend and per-model usage monitoring via the Administration API
+- Usage API: `GET /v1/organization/usage/completions` with `group_by=model` for per-model token counts (input, output, cached, requests)
+- Costs API: `GET /v1/organization/costs` with `group_by=line_item` for per-model cost in USD and total MTD spend
+- Admin key credential resolution via `$OPENAI_ADMIN_KEY` (`sk-admin-*`) with 4-tier chain
+- Token and cost merge into unified `ModelUsage` entries with `top_model_spend` extras
+- Config section for OpenAI (`providers.openai` with `admin_key_env`)
+
+### Changed
+
+- SPEC.md Section 3.3 rewritten with correct admin key auth, response schemas, and query parameters
+- OQ-012 closed: undocumented billing endpoints confirmed dead, admin key required
+- A-006 falsified: standard API keys cannot access org usage endpoints
+
 ## [0.5.0] - 2026-04-09
 
 ### Added

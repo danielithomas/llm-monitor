@@ -2299,30 +2299,30 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 ### v0.6.0 - OpenAI Provider
 
-- [ ] OpenAI provider implementation (`providers/openai.py`)
-- [ ] Usage API integration: `GET /v1/organization/usage/completions` with `group_by=model` for per-model token counts
-- [ ] Costs API integration: `GET /v1/organization/costs` for MTD spend, `group_by=line_item` for per-model costs
-- [ ] Merged per-model breakdown: usage tokens + costs joined into `ModelUsage` entries
-- [ ] Admin key credential resolution via `$OPENAI_ADMIN_KEY` (not standard project key)
-- [ ] Config section for OpenAI (`providers.openai` with `admin_key_env`)
-- [ ] Provider registration in `providers/__init__.py`
-- [ ] Redaction pattern verification (`sk-[a-zA-Z0-9-]{20,}` already covers `sk-admin-*`)
+- [x] OpenAI provider implementation (`providers/openai.py`)
+- [x] Usage API integration: `GET /v1/organization/usage/completions` with `group_by=model` for per-model token counts
+- [x] Costs API integration: `GET /v1/organization/costs` for MTD spend, `group_by=line_item` for per-model costs
+- [x] Merged per-model breakdown: usage tokens + costs joined into `ModelUsage` entries
+- [x] Admin key credential resolution via `$OPENAI_ADMIN_KEY` (not standard project key)
+- [x] Config section for OpenAI (`providers.openai` with `admin_key_env`)
+- [x] Provider registration in `providers/__init__.py`
+- [x] Redaction pattern verification (`sk-[a-zA-Z0-9-]{20,}` already covers `sk-admin-*`)
 
 **Tests:**
-- [ ] Usage API response parsing into per-model `ModelUsage` entries (input/output/cached tokens, request counts)
-- [ ] Costs API response parsing into "Spend (MTD)" `UsageWindow` (USD)
-- [ ] Per-model cost parsing via `group_by=line_item`
-- [ ] Token + cost merge: models from both endpoints combined into unified `ModelUsage`
-- [ ] Admin key credential resolution via `$OPENAI_ADMIN_KEY`
-- [ ] `is_configured()` validation (requires admin key)
-- [ ] 401/403 error handling (wrong key type or missing `api.usage.read` scope)
-- [ ] 429 rate limit backoff handling
-- [ ] Network error handling
-- [ ] Multi-bucket response aggregation (summing across time buckets)
-- [ ] Mocked HTTP via `respx` for all endpoints
+- [x] Usage API response parsing into per-model `ModelUsage` entries (input/output/cached tokens, request counts)
+- [x] Costs API response parsing into "Spend (MTD)" `UsageWindow` (USD)
+- [x] Per-model cost parsing via `group_by=line_item`
+- [x] Token + cost merge: models from both endpoints combined into unified `ModelUsage`
+- [x] Admin key credential resolution via `$OPENAI_ADMIN_KEY`
+- [x] `is_configured()` validation (requires admin key)
+- [x] 401/403 error handling (wrong key type or missing `api.usage.read` scope)
+- [x] 429 rate limit backoff handling
+- [x] Network error handling
+- [x] Multi-bucket response aggregation (summing across time buckets)
+- [x] Mocked HTTP via `respx` for all endpoints
 
 **Documentation:**
-- [ ] README.md update — add OpenAI to supported providers list, admin key setup (`$OPENAI_ADMIN_KEY`, organisation owner requirement), OpenAI-specific config example, per-model cost and usage breakdown explanation
+- [x] README.md update — add OpenAI to supported providers list, admin key setup (`$OPENAI_ADMIN_KEY`, organisation owner requirement), OpenAI-specific config example, per-model cost and usage breakdown explanation
 
 ### v0.7.0 - Ollama Provider
 
