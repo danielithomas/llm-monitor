@@ -1,0 +1,39 @@
+{
+  "changes": [
+    {
+      "teamId": "team-test-123",
+      "changeOrigin": "PURCHASE",
+      "topupStatus": "SUCCEEDED",
+      "amount": { "val": "10000" },
+      "invoiceId": "inv-001",
+      "invoiceNumber": "INV-2026-001",
+      "createTime": "2026-03-15T10:00:00Z",
+      "spendBpKeyYear": 2026,
+      "spendBpKeyMonth": 3,
+      "createTs": "1742036400",
+      "paymentProcessor": {
+        "kind": "STRIPE",
+        "externalParty": "",
+        "externalInvoiceId": ""
+      }
+    },
+    {
+      "teamId": "team-test-123",
+      "changeOrigin": "SPEND",
+      "topupStatus": "SUCCEEDED",
+      "amount": { "val": "-2500" },
+      "invoiceId": "",
+      "invoiceNumber": "",
+      "createTime": "2026-04-01T00:00:00Z",
+      "spendBpKeyYear": 2026,
+      "spendBpKeyMonth": 4,
+      "createTs": "1743465600",
+      "paymentProcessor": {
+        "kind": "UNKNOWN",
+        "externalParty": "",
+        "externalInvoiceId": ""
+      }
+    }
+  ],
+  "total": { "val": "7500" }
+}

@@ -2,7 +2,7 @@
 
 Monitor your LLM consumption from local and online services.
 
-Currently supports **Anthropic Claude** (subscription utilisation tracking) and **OpenAI** (API spend and per-model usage via Admin API). Future versions will add Grok (xAI), Ollama, and local system metrics.
+Currently supports **Anthropic Claude** (subscription utilisation tracking), **xAI Grok** (spend monitoring, spending limits, prepaid balance), and **OpenAI** (API spend and per-model usage via Admin API). Future versions will add Ollama and local system metrics.
 
 ## Quick Start
 
@@ -112,6 +112,23 @@ The Claude provider reads OAuth credentials managed by Claude Code:
 2. Run `claude /login` to authenticate
 3. The tool reads `~/.claude/.credentials.json` (read-only, never writes to it)
 
+### Grok (xAI)
+
+The Grok provider uses the xAI Management API for spend and usage monitoring:
+
+1. Go to [console.x.ai](https://console.x.ai) and create a **Management Key**
+2. Set `$XAI_MANAGEMENT_KEY` (or configure `management_key_command` in config)
+3. Set `team_id` in `[providers.grok]` config (or `$XAI_TEAM_ID` env var)
+4. Enable the provider: set `enabled = true` in `[providers.grok]`
+
+The Management Key is separate from a regular xAI API key. It provides access to billing data, spending limits, and usage analytics. An optional `$XAI_API_KEY` can be set for rate limit header data but is not required.
+
+**Monitored data:**
+- **Spend (MTD)** — month-to-date spend in the current billing cycle
+- **Spend vs Limit** — percentage of hard spending limit consumed
+- **Prepaid Balance** — remaining prepaid credits
+- **Per-model breakdown** — token counts and costs per model (grok-3, grok-3-mini, etc.)
+
 ### OpenAI
 
 The OpenAI provider uses the Administration API, which requires an **Admin API Key** (`sk-admin-*`):
@@ -142,6 +159,13 @@ critical = 90
 enabled = true
 credentials_path = ""            # empty = default (~/.claude/.credentials.json)
 show_opus = true
+
+[providers.grok]
+enabled = false                  # enable when credentials are configured
+team_id = ""                     # required: xAI team ID (or set $XAI_TEAM_ID)
+management_key_env = "XAI_MANAGEMENT_KEY"
+# management_key_command = "secret-tool lookup application llm-monitor provider grok-management"
+# key_env = "XAI_API_KEY"       # optional: for rate limit data
 
 [providers.openai]
 enabled = false
@@ -384,6 +408,8 @@ services:
       - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
     environment:
       - OPENAI_ADMIN_KEY=${OPENAI_ADMIN_KEY}
+      - XAI_MANAGEMENT_KEY=${XAI_MANAGEMENT_KEY}
+      - XAI_TEAM_ID=${XAI_TEAM_ID}
       - XAI_API_KEY=${XAI_API_KEY}
 
 volumes:

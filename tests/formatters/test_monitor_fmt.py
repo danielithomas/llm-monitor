@@ -185,6 +185,27 @@ class TestFormatCompactLine:
         text = _render_to_str(format_compact_line(status))
         assert "error" in text
 
+    def test_usd_window_shows_dollar_value(self) -> None:
+        window = UsageWindow(
+            name="Spend (MTD)",
+            utilisation=0.0,
+            resets_at=None,
+            status="normal",
+            unit="usd",
+            raw_value=1450.00,
+        )
+        status = ProviderStatus(
+            provider_name="grok",
+            provider_display="xAI Grok",
+            timestamp=datetime.now(timezone.utc),
+            cached=False,
+            cache_age_seconds=0,
+            windows=[window],
+        )
+        text = _render_to_str(format_compact_line(status))
+        assert "$1,450.00" in text
+        assert "0.0%" not in text
+
     def test_no_windows_no_errors(self) -> None:
         status = ProviderStatus(
             provider_name="claude",
@@ -239,6 +260,28 @@ class TestColourTransitions:
         panel = _build_provider_panel(status)
         output = _render_to_str(panel)
         assert "85.0%" in output
+
+    def test_provider_panel_usd_window(self) -> None:
+        window = UsageWindow(
+            name="Spend (MTD)",
+            utilisation=0.0,
+            resets_at=None,
+            status="normal",
+            unit="usd",
+            raw_value=1450.00,
+        )
+        status = ProviderStatus(
+            provider_name="grok",
+            provider_display="xAI Grok",
+            timestamp=datetime.now(timezone.utc),
+            cached=False,
+            cache_age_seconds=0,
+            windows=[window],
+        )
+        panel = _build_provider_panel(status)
+        output = _render_to_str(panel)
+        assert "$1,450.00" in output
+        assert "0.0%" not in output
 
 
 # ---------------------------------------------------------------------------

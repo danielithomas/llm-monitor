@@ -1,0 +1,52 @@
+{
+  "coreInvoice": {
+    "lines": [
+      {
+        "clusterName": "us-east-1",
+        "description": "grok-3",
+        "unitType": "input tokens (1M)",
+        "unitPrice": "3.00",
+        "numUnits": "150.000",
+        "amount": "450.00"
+      },
+      {
+        "clusterName": "us-east-1",
+        "description": "grok-3",
+        "unitType": "output tokens (1M)",
+        "unitPrice": "15.00",
+        "numUnits": "50.000",
+        "amount": "750.00"
+      },
+      {
+        "clusterName": "us-east-1",
+        "description": "grok-3-mini",
+        "unitType": "input tokens (1M)",
+        "unitPrice": "0.30",
+        "numUnits": "500.000",
+        "amount": "150.00"
+      },
+      {
+        "clusterName": "us-east-1",
+        "description": "grok-3-mini",
+        "unitType": "output tokens (1M)",
+        "unitPrice": "0.50",
+        "numUnits": "200.000",
+        "amount": "100.00"
+      }
+    ],
+    "amountBeforeVatLimited": { "val": "0" },
+    "amountBeforeVatUnlimited": { "val": "145000" },
+    "amountBeforeVatLimitedAndUnlimited": { "val": "145000" },
+    "amountBeforeVat": "1450.00",
+    "vatCost": "0.00",
+    "amountAfterVat": "1450.00",
+    "autoCreditsIssued": "0.00",
+    "defaultCreditsIssued": "0.00",
+    "totalWithCorr": { "val": "145000" },
+    "prepaidCredits": { "val": "0" },
+    "prepaidCreditsUsed": { "val": "0" }
+  },
+  "effectiveSpendingLimit": "5000.00",
+  "defaultCredits": "0.00",
+  "billingCycle": { "year": 2026, "month": 4 }
+}
