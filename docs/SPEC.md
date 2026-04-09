@@ -446,36 +446,111 @@ The backoff state is persisted in the provider's cache file so it survives proce
 
 ---
 
-### 3.3 OpenAI - v0.4.0
+### 3.3 OpenAI - v0.6.0
 
-**Type:** API spend and credit monitoring
+**Type:** API spend and usage monitoring
 
-**Data source:** OpenAI platform API endpoints
+**Data source:** OpenAI Administration API endpoints (Usage API and Costs API)
 
 **Authentication:**
-- API key from OpenAI Console, resolved via `resolve_credential()` (keyring, env var, or key_command).
-- Default env var: `$OPENAI_API_KEY`.
+- **Admin API key** (`sk-admin-*` prefix) from OpenAI Console → Settings → Organization → Admin Keys.
+- Only Organisation Owners can create admin keys. Required scope: `api.usage.read`.
+- Resolved via `resolve_credential()` with credential name `admin_key` (keyring, env var, or key_command).
+- Default env var: `$OPENAI_ADMIN_KEY`.
+- Standard project keys (`sk-proj-*`) do **not** have access to Usage or Costs endpoints.
 
 **Available endpoints:**
 
-| Endpoint | Data | Notes |
-|----------|------|-------|
-| `GET /v1/organization/usage/completions` | Token usage by model, project, time bucket | Official Usage API |
-| `GET /v1/organization/costs` | Cost breakdown by line item | Official Costs API |
-| `GET /v1/dashboard/billing/subscription` | Plan and billing cycle details | Undocumented but widely used |
-| `GET /v1/dashboard/billing/credit_grants` | Remaining credit balance | Undocumented but widely used |
+| Endpoint | Data | Auth | Notes |
+|----------|------|------|-------|
+| `GET /v1/organization/usage/completions` | Token usage by model, project, time bucket | Admin key | Official Usage API. `group_by` supports: `project_id`, `user_id`, `api_key_id`, `model`, `batch`, `service_tier`. |
+| `GET /v1/organization/costs` | Cost breakdown by line item, project | Admin key | Official Costs API. `group_by` supports: `project_id`, `line_item`. |
 
-**Mapped usage windows (planned):**
+**Removed endpoints (no longer viable):**
+- ~~`/v1/dashboard/billing/subscription`~~ — undocumented, now requires browser session key (not API key). Dead as of late 2025.
+- ~~`/v1/dashboard/billing/credit_grants`~~ — same. No programmatic credit balance API exists.
+
+**Usage API query parameters:**
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `start_time` | integer | Yes | Unix timestamp (seconds), inclusive |
+| `end_time` | integer | No | Unix timestamp (seconds), exclusive. Defaults to now. |
+| `bucket_width` | string | No | `1m`, `1h`, or `1d` (default `1d`) |
+| `group_by` | array | No | See per-endpoint list above |
+| `project_ids` | array | No | Filter by project |
+| `models` | array | No | Filter by model |
+| `api_key_ids` | array | No | Filter by API key |
+| `user_ids` | array | No | Filter by user |
+
+**Usage API response schema:**
+```json
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1736616660,
+      "end_time": 1736640000,
+      "results": [
+        {
+          "object": "organization.usage.completions.result",
+          "input_tokens": 141201,
+          "output_tokens": 9756,
+          "input_cached_tokens": 0,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0,
+          "num_model_requests": 470,
+          "model": "gpt-4o-2024-08-06"
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}
+```
+
+**Costs API response schema:**
+```json
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1736553600,
+      "end_time": 1736640000,
+      "results": [
+        {
+          "object": "organization.costs.result",
+          "amount": {
+            "value": 0.13,
+            "currency": "usd"
+          },
+          "line_item": "gpt-4o-2024-08-06",
+          "project_id": null
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}
+```
+
+**Mapped usage windows:**
 
 | Window | Source | Unit | Notes |
 |--------|--------|------|-------|
-| Credit Balance | `/v1/dashboard/billing/credit_grants` | usd | Remaining prepaid credits |
-| Spend (MTD) | `/v1/organization/costs` | usd | Month-to-date API spend |
-| Rate Limit | Response headers | percent | Per-model RPM/TPM |
+| Spend (MTD) | `/v1/organization/costs` | usd | Month-to-date API spend, summed across all buckets |
 
-**Extras dict:** `{ "plan": "...", "models_used": [...], "top_model_spend": {...} }`
+**Extras dict:** `{ "models_used": [...], "top_model_spend": {...}, "bucket_width": "1d" }`
 
-**Per-model breakdown:** The OpenAI Usage API natively supports grouping by model via the `group_by[]=model` parameter. The provider populates `model_usage` with per-model token counts and costs. This is the richest per-model data of any provider.
+**Per-model breakdown:** The Usage API natively supports `group_by=model`. The provider calls both endpoints with model grouping:
+- `/v1/organization/usage/completions?group_by=model` → per-model token counts (`input_tokens`, `output_tokens`, `input_cached_tokens`, `num_model_requests`)
+- `/v1/organization/costs?group_by=line_item` → per-model cost in USD
+
+These are merged into `ModelUsage` entries with both token counts and costs. This is the richest per-model data of any provider.
 
 **Allowed hosts:** `api.openai.com` (HTTPS only).
 
@@ -1022,9 +1097,9 @@ management_key_env = "XAI_MANAGEMENT_KEY"
 # ─── Provider: OpenAI ─────────────────────────────────────────
 [providers.openai]
 enabled = false
-key_env = "OPENAI_API_KEY"
-# key_command = "pass show llm-monitor/openai"
-# key_keyring = true
+admin_key_env = "OPENAI_ADMIN_KEY"       # Admin key (sk-admin-*), NOT project key
+# admin_key_command = "pass show llm-monitor/openai-admin"
+# admin_key_keyring = true
 
 # ─── Provider: Ollama ─────────────────────────────────────────
 [providers.ollama]
@@ -1415,10 +1490,10 @@ Use the Python `keyring` library, which interfaces with the D-Bus Secret Service
 ```bash
 # User stores a key (one-time setup)
 llm-monitor config set-key --provider openai
-# Prompts securely for the key, stores via keyring
+# Prompts securely for the admin key, stores via keyring
 
 # Or via secret-tool directly
-secret-tool store --label="llm-monitor: OpenAI API Key" \
+secret-tool store --label="llm-monitor: OpenAI Admin Key" \
     application llm-monitor provider openai
 ```
 
@@ -1428,9 +1503,9 @@ The config file may contain a `key_command` directive that executes a shell comm
 
 ```toml
 [providers.openai]
-key_command = "pass show llm-monitor/openai"
-# or: key_command = "secret-tool lookup application llm-monitor provider openai"
-# or: key_command = "vault kv get -field=api_key secret/llm-monitor/openai"
+admin_key_command = "pass show llm-monitor/openai-admin"
+# or: admin_key_command = "secret-tool lookup application llm-monitor provider openai"
+# or: admin_key_command = "vault kv get -field=admin_key secret/llm-monitor/openai"
 ```
 
 **Tier 3: Environment variables**
@@ -1438,7 +1513,7 @@ key_command = "pass show llm-monitor/openai"
 Standard practice for CI/CD and containerised environments. Acknowledged risk: readable via `/proc/$PID/environ` by the same user. Acceptable for ephemeral contexts.
 
 ```bash
-export OPENAI_API_KEY="sk-..."
+export OPENAI_ADMIN_KEY="sk-admin-..."
 export XAI_API_KEY="xai-..."
 export XAI_MANAGEMENT_KEY="xai-mgmt-..."
 export XAI_TEAM_ID="..."
@@ -1450,7 +1525,7 @@ Read-only access to `~/.claude/.credentials.json`. This file is owned and manage
 
 **Resolution order per provider:**
 1. `key_command` (if configured, execute and read stdout)
-2. `key_env` / well-known env var (e.g., `$OPENAI_API_KEY`)
+2. `key_env` / well-known env var (e.g., `$OPENAI_ADMIN_KEY`)
 3. System keyring lookup (`keyring.get_password(...)`)
 4. Provider-specific credential file (Claude only)
 
@@ -1879,7 +1954,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | OQ-009 | **GTK4 vs GTK3 for v2?** GTK4 + libadwaita is modern GNOME, but AppIndicator3 is GTK3. May need bridging or alternative tray approach. | Medium (v2) | GTK | Open |
 | ~~OQ-010~~ | ~~**Licensing?** MIT vs GPL. MIT is simpler; GPL aligns with GNOME ecosystem.~~ | ~~Low~~ | ~~All~~ | **Closed:** MIT license committed to repo. `pyproject.toml` updated accordingly. |
 | ~~OQ-011~~ | ~~**Does xAI have a programmatic billing/usage API?** Console shows spend, but no documented REST endpoint for querying balance or MTD cost found. Rate limit headers provide per-request data only.~~ | ~~High~~ | ~~Grok~~ | **Closed:** Yes. The xAI Management API (`management-api.x.ai`) provides full billing, spend, usage analytics, prepaid balance, and spending limit endpoints. Requires a separate Management Key (not the inference API key) and team ID. See updated Section 3.2. |
-| OQ-012 | **OpenAI billing endpoint stability?** `/v1/dashboard/billing/subscription` and `/v1/dashboard/billing/credit_grants` are undocumented but widely used. The official Usage API (`/v1/organization/usage/...`) requires admin-level access. | Medium | OpenAI | Open |
+| ~~OQ-012~~ | ~~**OpenAI billing endpoint stability?** `/v1/dashboard/billing/subscription` and `/v1/dashboard/billing/credit_grants` are undocumented but widely used. The official Usage API (`/v1/organization/usage/...`) requires admin-level access.~~ | ~~Medium~~ | ~~OpenAI~~ | **Closed:** Confirmed. The undocumented `/v1/dashboard/billing/*` endpoints are dead — they require browser session keys as of late 2025. The official Usage API and Costs API (`/v1/organization/usage/*`, `/v1/organization/costs`) require an Admin API Key (`sk-admin-*`), not a standard project key. No programmatic credit balance API exists. See updated Section 3.3. |
 | OQ-013 | **Ollama metrics endpoint availability?** Ollama does not have a built-in `/metrics` Prometheus endpoint in all versions. The proxy approach (ollama-metrics) is an alternative but adds a dependency. Should we support both paths? | Medium | Ollama | Open |
 | OQ-014 | **AMD GPU support depth?** `pyamdgpuinfo` is limited. `rocm-smi` subprocess parsing is more complete but slower. What level of AMD support is needed? | Low | Local | Open |
 | ~~OQ-015~~ | ~~**Provider plugin system: entry_points vs explicit registration?** Entry points allow third-party providers but add packaging complexity. Explicit registration in a registry dict is simpler for v1.~~ | ~~Low~~ | ~~Architecture~~ | **Closed:** Explicit registration via `@register_provider` decorator and module-level dict for v1. See Section 2.2. |
@@ -1906,7 +1981,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | A-003 | The Claude response schema (`five_hour`, `seven_day`, `seven_day_opus`) is reasonably stable across plan types. | Schema changes require parser updates. Defensive parsing mitigates. | Claude |
 | A-004 | The `anthropic-beta: oauth-2025-04-20` header value will remain valid or a successor discoverable. | API calls fail. Monitor Claude Code releases for changes. | Claude |
 | A-005 | Python 3.10+ is available on target Linux distributions (Ubuntu 22.04+, Fedora 36+, Arch current). | Older distros need `pyenv` or container. | All |
-| A-006 | OpenAI's `/v1/organization/usage/completions` endpoint is accessible with a standard API key (not just admin keys). | If admin-only, fall back to undocumented billing endpoints. | OpenAI |
+| ~~A-006~~ | ~~OpenAI's `/v1/organization/usage/completions` endpoint is accessible with a standard API key (not just admin keys).~~ | ~~If admin-only, fall back to undocumented billing endpoints.~~ | ~~OpenAI~~ | *Falsified. Both Usage and Costs APIs require an Admin API Key (`sk-admin-*`) with `api.usage.read` scope. The undocumented billing endpoints are also dead. Provider now requires admin key. See OQ-012 closure and updated Section 3.3.* |
 | A-007 | Ollama runs on `localhost:11434` by default and the `/api/ps` and `/api/tags` endpoints are stable. | Ollama API changes would require updates. These endpoints have been stable for 2+ years. | Ollama |
 | A-008 | NVIDIA GPU monitoring via `pynvml` works on Linux with standard NVIDIA drivers installed. | If driver mismatch, GPU metrics fail gracefully. | Local |
 | ~~A-009~~ | ~~Rate limiting on Claude's usage endpoint is per-token, not per-IP. Running alongside Claude Code's own polling won't cause mutual 429s.~~ | ~~If per-IP, concurrent polling could cause interference.~~ | ~~Claude~~ | *Superseded by D-004 (10m poll interval) and D-041 (exponential backoff). Design is now robust regardless of rate-limit scope.* |
@@ -1975,6 +2050,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-049 | **`--interval`/`-i` flag: integer seconds, default 30, minimum 5.** | Only meaningful with `--monitor` — controls UI refresh rate. Minimum 5 seconds prevents accidental API hammering in standalone mode. Values < 5 clamped to 5 with a stderr warning. | 2026-04-08 | Accepted |
 | D-050 | **Provider health indicator thresholds based on poll_interval multiples.** | Green `●` = data age ≤ 1× poll_interval (healthy). Yellow `●` = data age > 1× but ≤ 3× poll_interval (stale — daemon may have missed a cycle). Red `●` = data age > 3× poll_interval OR provider has errors. poll_interval read from config (default 600s, per-provider override respected). | 2026-04-08 | Accepted |
 | D-051 | **`--notify` deferred to v0.9.0. No flag added in v0.4.0.** | The spec's roadmap places notifications at v0.9.0. Adding a dead flag creates confusion. Desktop notification support arrives with the notification engine. | 2026-04-08 | Accepted |
+| D-052 | **OpenAI provider requires Admin API Key (`sk-admin-*`), not a standard project key.** | The Usage API and Costs API both require the `api.usage.read` scope, which is only available on admin keys. Standard project keys (`sk-proj-*`) return 403. The undocumented `/v1/dashboard/billing/*` endpoints are dead (require browser session keys since late 2025). No credit balance API exists. Env var: `$OPENAI_ADMIN_KEY`. Only Organisation Owners can create admin keys. See OQ-012. | 2026-04-10 | Accepted |
 
 ---
 
@@ -2223,17 +2299,30 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 ### v0.6.0 - OpenAI Provider
 
-- [ ] OpenAI provider implementation
-- [ ] Usage API integration (`/v1/organization/usage/completions`)
-- [ ] Per-model usage breakdown via `group_by[]=model` populating `model_usage` table
-- [ ] Billing endpoint integration (credit balance, subscription)
-- [ ] Config section for OpenAI
+- [ ] OpenAI provider implementation (`providers/openai.py`)
+- [ ] Usage API integration: `GET /v1/organization/usage/completions` with `group_by=model` for per-model token counts
+- [ ] Costs API integration: `GET /v1/organization/costs` for MTD spend, `group_by=line_item` for per-model costs
+- [ ] Merged per-model breakdown: usage tokens + costs joined into `ModelUsage` entries
+- [ ] Admin key credential resolution via `$OPENAI_ADMIN_KEY` (not standard project key)
+- [ ] Config section for OpenAI (`providers.openai` with `admin_key_env`)
+- [ ] Provider registration in `providers/__init__.py`
+- [ ] Redaction pattern verification (`sk-[a-zA-Z0-9-]{20,}` already covers `sk-admin-*`)
 
 **Tests:**
-- [ ] `test_providers/test_openai.py` — usage response parsing with per-model breakdown, cost endpoint parsing, credit balance mapping, credential resolution via `$OPENAI_API_KEY`, 429/5xx handling, undocumented endpoint fallback, mocked HTTP via `respx`
+- [ ] Usage API response parsing into per-model `ModelUsage` entries (input/output/cached tokens, request counts)
+- [ ] Costs API response parsing into "Spend (MTD)" `UsageWindow` (USD)
+- [ ] Per-model cost parsing via `group_by=line_item`
+- [ ] Token + cost merge: models from both endpoints combined into unified `ModelUsage`
+- [ ] Admin key credential resolution via `$OPENAI_ADMIN_KEY`
+- [ ] `is_configured()` validation (requires admin key)
+- [ ] 401/403 error handling (wrong key type or missing `api.usage.read` scope)
+- [ ] 429 rate limit backoff handling
+- [ ] Network error handling
+- [ ] Multi-bucket response aggregation (summing across time buckets)
+- [ ] Mocked HTTP via `respx` for all endpoints
 
 **Documentation:**
-- [ ] README.md update — add OpenAI to supported providers list, OpenAI credential setup (`$OPENAI_API_KEY`), OpenAI-specific config example, per-model cost breakdown explanation, credit balance monitoring
+- [ ] README.md update — add OpenAI to supported providers list, admin key setup (`$OPENAI_ADMIN_KEY`, organisation owner requirement), OpenAI-specific config example, per-model cost and usage breakdown explanation
 
 ### v0.7.0 - Ollama Provider
 
@@ -2362,7 +2451,7 @@ services:
       - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
     environment:
       # Cloud provider API keys (alternative to keyring)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_ADMIN_KEY=${OPENAI_ADMIN_KEY}
       - XAI_API_KEY=${XAI_API_KEY}
       - XAI_MANAGEMENT_KEY=${XAI_MANAGEMENT_KEY}
       - XAI_TEAM_ID=${XAI_TEAM_ID}

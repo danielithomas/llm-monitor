@@ -39,6 +39,10 @@ DEFAULT_CONFIG: dict = {
             "team_id": "",
             "management_key_env": "XAI_MANAGEMENT_KEY",
         },
+        "openai": {
+            "enabled": False,
+            "admin_key_env": "OPENAI_ADMIN_KEY",
+        },
     },
     "history": {
         "enabled": True,

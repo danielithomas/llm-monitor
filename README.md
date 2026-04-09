@@ -2,7 +2,7 @@
 
 Monitor your LLM consumption from local and online services.
 
-Currently supports **Anthropic Claude** (subscription utilisation tracking) and **xAI Grok** (spend monitoring, spending limits, prepaid balance). Future versions will add OpenAI, Ollama, and local system metrics.
+Currently supports **Anthropic Claude** (subscription utilisation tracking), **xAI Grok** (spend monitoring, spending limits, prepaid balance), and **OpenAI** (API spend and per-model usage via Admin API). Future versions will add Ollama and local system metrics.
 
 ## Quick Start
 
@@ -129,6 +129,17 @@ The Management Key is separate from a regular xAI API key. It provides access to
 - **Prepaid Balance** — remaining prepaid credits
 - **Per-model breakdown** — token counts and costs per model (grok-3, grok-3-mini, etc.)
 
+### OpenAI
+
+The OpenAI provider uses the Administration API, which requires an **Admin API Key** (`sk-admin-*`):
+
+1. Go to [platform.openai.com](https://platform.openai.com) → Settings → Organisation → Admin Keys
+2. Create an admin key (only Organisation Owners can do this)
+3. Set the environment variable: `export OPENAI_ADMIN_KEY="sk-admin-..."`
+4. Enable in config: set `[providers.openai] enabled = true`
+
+Standard project keys (`sk-proj-*`) do **not** have access to the Usage or Costs APIs.
+
 ## Configuration
 
 Config file location: `~/.config/llm-monitor/config.toml`
@@ -156,6 +167,11 @@ management_key_env = "XAI_MANAGEMENT_KEY"
 # management_key_command = "secret-tool lookup application llm-monitor provider grok-management"
 # key_env = "XAI_API_KEY"       # optional: for rate limit data
 
+[providers.openai]
+enabled = false
+admin_key_env = "OPENAI_ADMIN_KEY"       # Admin key (sk-admin-*), NOT project key
+# admin_key_command = "pass show llm-monitor/openai-admin"
+
 [history]
 enabled = true
 retention_days = 90
@@ -173,8 +189,8 @@ Override paths via environment variables:
 
 Credentials are **never stored in the config file**. Resolution order:
 
-1. **`key_command`** — execute a shell command (e.g., `pass show llm-monitor/openai`)
-2. **Environment variable** — e.g., `$OPENAI_API_KEY`, `$XAI_API_KEY`
+1. **`key_command`** — execute a shell command (e.g., `pass show llm-monitor/openai-admin`)
+2. **Environment variable** — e.g., `$OPENAI_ADMIN_KEY`, `$XAI_API_KEY`
 3. **System keyring** — GNOME Keyring, KDE Wallet, KeePassXC via Python `keyring`
 4. **Provider credential file** — Claude only (`~/.claude/.credentials.json`)
 
@@ -391,7 +407,7 @@ services:
       - ${HOME}/.config/llm-monitor/config.toml:/home/monitor/.config/llm-monitor/config.toml:ro
       - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - OPENAI_ADMIN_KEY=${OPENAI_ADMIN_KEY}
       - XAI_MANAGEMENT_KEY=${XAI_MANAGEMENT_KEY}
       - XAI_TEAM_ID=${XAI_TEAM_ID}
       - XAI_API_KEY=${XAI_API_KEY}

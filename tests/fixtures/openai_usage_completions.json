@@ -1,0 +1,51 @@
+{
+  "object": "page",
+  "data": [
+    {
+      "object": "bucket",
+      "start_time": 1736553600,
+      "end_time": 1736640000,
+      "results": [
+        {
+          "object": "organization.usage.completions.result",
+          "input_tokens": 85000,
+          "output_tokens": 12000,
+          "input_cached_tokens": 5000,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0,
+          "num_model_requests": 250,
+          "model": "gpt-4o-2024-08-06"
+        },
+        {
+          "object": "organization.usage.completions.result",
+          "input_tokens": 56000,
+          "output_tokens": 9756,
+          "input_cached_tokens": 0,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0,
+          "num_model_requests": 220,
+          "model": "gpt-4.1-mini-2025-04-14"
+        }
+      ]
+    },
+    {
+      "object": "bucket",
+      "start_time": 1736640000,
+      "end_time": 1736726400,
+      "results": [
+        {
+          "object": "organization.usage.completions.result",
+          "input_tokens": 56201,
+          "output_tokens": 8500,
+          "input_cached_tokens": 3000,
+          "input_audio_tokens": 0,
+          "output_audio_tokens": 0,
+          "num_model_requests": 180,
+          "model": "gpt-4o-2024-08-06"
+        }
+      ]
+    }
+  ],
+  "has_more": false,
+  "next_page": null
+}
