@@ -216,11 +216,20 @@ api_key_env = "OLLAMA_API_KEY"     # default, can be omitted
 
 Local instance monitoring (models loaded, VRAM, health) is **not** an alpha feature — it uses stable, documented APIs and works without `enable_alpha_features`.
 
-### Claude Extra Usage Spend (planned — v0.7.1, [#19](https://github.com/danielithomas/llm-monitor/issues/19))
+### Claude Extra Usage Spend (v0.7.1)
 
-Tracks dollar spend for Claude usage beyond the subscription cap. No additional credentials needed — uses the existing Claude Code OAuth token.
+Tracks dollar spend for Claude usage beyond the subscription cap. No additional credentials needed — uses the existing Claude Code OAuth token. Enable alpha features in your config:
 
-**Why alpha?** No REST API exists for extra usage data. The implementation will use undocumented endpoints or web scraping. It will graduate to stable when Anthropic exposes an official endpoint.
+```toml
+[general]
+enable_alpha_features = true
+```
+
+**What it monitors:**
+- Extra usage spend vs monthly limit (percentage + dollar amounts)
+- Whether extra usage is enabled on your account
+
+**Why alpha?** The extra usage data comes from an undocumented field in the Claude usage API. It could change without notice. It will graduate to stable when Anthropic formally documents the endpoint.
 
 ## Configuration
 

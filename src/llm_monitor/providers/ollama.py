@@ -10,14 +10,13 @@ See SPEC.md Section 3.4 for endpoint mapping and design rationale.
 from __future__ import annotations
 
 import os
-import sys
 from datetime import datetime, timezone
 from typing import Optional
 from urllib.parse import urlparse
 
 import httpx
 
-from llm_monitor.config import is_alpha_enabled
+from llm_monitor.config import emit_alpha_warning, is_alpha_enabled
 from llm_monitor.models import (
     CredentialError,
     ProviderStatus,
@@ -30,21 +29,6 @@ from llm_monitor.providers.base import Provider
 from llm_monitor.security import is_container_mode, run_key_command
 
 CLOUD_API_BASE = "https://ollama.com"
-
-# Module-level flag: emit the alpha warning at most once per process
-_alpha_warning_emitted = False
-
-
-def _emit_alpha_warning() -> None:
-    """Print one-time alpha feature warning to stderr."""
-    global _alpha_warning_emitted
-    if not _alpha_warning_emitted:
-        print(
-            "Warning: Alpha features are enabled. Some data sources are "
-            "unstable and may break between releases.",
-            file=sys.stderr,
-        )
-        _alpha_warning_emitted = True
 
 
 @register_provider
@@ -185,7 +169,7 @@ class OllamaProvider(Provider):
 
         # Cloud usage (alpha-gated)
         if self._cloud_enabled and is_alpha_enabled(self._config):
-            _emit_alpha_warning()
+            emit_alpha_warning()
             cloud_data = await self._fetch_cloud_usage(client, windows, errors)
             if cloud_data:
                 extras["cloud"] = cloud_data

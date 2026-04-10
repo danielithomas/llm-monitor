@@ -49,11 +49,18 @@ def _usage_response() -> dict:
     )
 
 
-def _make_provider(tmp_path: Path, creds: dict | None = None) -> ClaudeProvider:
+def _make_provider(
+    tmp_path: Path,
+    creds: dict | None = None,
+    alpha: bool = False,
+) -> ClaudeProvider:
     """Create a ClaudeProvider pointing at tmp_path credentials."""
     creds_path = tmp_path / ".credentials.json"
     _write_credentials(creds_path, creds)
     config = {
+        "general": {
+            "enable_alpha_features": alpha,
+        },
         "providers": {
             "claude": {
                 "credentials_path": str(creds_path),
@@ -111,8 +118,8 @@ class TestCredentialReading:
 class TestFetchUsage:
     @respx.mock
     @pytest.mark.asyncio
-    async def test_successful_response_three_windows(self, tmp_path):
-        """200 with full response produces 3 UsageWindow objects."""
+    async def test_successful_response_windows(self, tmp_path):
+        """200 with full response produces expected UsageWindow objects."""
         provider = _make_provider(tmp_path)
 
         route = respx.get("https://api.anthropic.com/api/oauth/usage").respond(
@@ -125,16 +132,18 @@ class TestFetchUsage:
         assert route.called
         assert isinstance(status, ProviderStatus)
         assert len(status.errors) == 0
-        assert len(status.windows) == 3
         names = {w.name for w in status.windows}
         assert "Session (5h)" in names
         assert "Weekly (7d)" in names
         assert "Weekly Opus (7d)" in names
+        assert "Weekly Sonnet (7d)" in names
+        # Extra Usage not present without alpha flag
+        assert "Extra Usage" not in names
 
     @respx.mock
     @pytest.mark.asyncio
-    async def test_null_opus_two_windows(self, tmp_path):
-        """When seven_day_opus is null, only 2 windows are returned."""
+    async def test_null_opus_skipped(self, tmp_path):
+        """When seven_day_opus is null, that window is not returned."""
         provider = _make_provider(tmp_path)
 
         response_data = _usage_response()
@@ -147,9 +156,11 @@ class TestFetchUsage:
         async with httpx.AsyncClient() as client:
             status = await provider.fetch_usage(client)
 
-        assert len(status.windows) == 2
         names = {w.name for w in status.windows}
         assert "Weekly Opus (7d)" not in names
+        # Other windows still present
+        assert "Session (5h)" in names
+        assert "Weekly (7d)" in names
 
     @pytest.mark.asyncio
     async def test_expired_token_no_http_call(self, tmp_path):
@@ -220,7 +231,7 @@ class TestFetchUsage:
 
         assert call_count == 2
         assert len(status.errors) == 0
-        assert len(status.windows) == 3
+        assert len(status.windows) >= 3
 
     @respx.mock
     @pytest.mark.asyncio
@@ -286,3 +297,246 @@ class TestMetadata:
         config = {"providers": {"claude": {}}}
         p = ClaudeProvider(config)
         assert "api.anthropic.com" in p.allowed_hosts
+
+
+# ---------------------------------------------------------------------------
+# seven_day_sonnet window
+# ---------------------------------------------------------------------------
+
+
+class TestSonnetWindow:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_sonnet_window_parsed(self, tmp_path):
+        """seven_day_sonnet is mapped to Weekly Sonnet (7d) window."""
+        provider = _make_provider(tmp_path)
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        sonnet = next(
+            (w for w in status.windows if w.name == "Weekly Sonnet (7d)"), None
+        )
+        assert sonnet is not None
+        assert sonnet.utilisation == 5.0
+        assert sonnet.unit == "percent"
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_null_sonnet_skipped(self, tmp_path):
+        """When seven_day_sonnet is null, no Sonnet window is returned."""
+        provider = _make_provider(tmp_path)
+
+        data = _usage_response()
+        data["seven_day_sonnet"] = None
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=data
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        names = {w.name for w in status.windows}
+        assert "Weekly Sonnet (7d)" not in names
+
+
+# ---------------------------------------------------------------------------
+# Extra usage (alpha)
+# ---------------------------------------------------------------------------
+
+
+class TestExtraUsage:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extra_usage_with_alpha(self, tmp_path, monkeypatch):
+        """Extra Usage window appears when alpha enabled and extra_usage present."""
+        import llm_monitor.config as config_mod
+        monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
+
+        provider = _make_provider(tmp_path, alpha=True)
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        extra = next(
+            (w for w in status.windows if w.name == "Extra Usage"), None
+        )
+        assert extra is not None
+        assert extra.utilisation == 42.5
+        assert extra.unit == "percent"
+        # 4250 cents / 100 = $42.50
+        assert extra.raw_value == pytest.approx(42.50)
+        # 10000 cents / 100 = $100.00
+        assert extra.raw_limit == pytest.approx(100.00)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extra_usage_hidden_without_alpha(self, tmp_path):
+        """Extra Usage window NOT present when alpha disabled."""
+        provider = _make_provider(tmp_path, alpha=False)
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        names = {w.name for w in status.windows}
+        assert "Extra Usage" not in names
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extra_usage_disabled_on_account(self, tmp_path):
+        """No Extra Usage window when is_enabled is false."""
+        provider = _make_provider(tmp_path, alpha=True)
+
+        data = _usage_response()
+        data["extra_usage"] = {
+            "is_enabled": False,
+            "monthly_limit": 0,
+            "used_credits": 0.0,
+            "utilization": 0.0,
+        }
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=data
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        names = {w.name for w in status.windows}
+        assert "Extra Usage" not in names
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extra_usage_absent_from_response(self, tmp_path):
+        """No Extra Usage window when extra_usage field is missing entirely."""
+        provider = _make_provider(tmp_path, alpha=True)
+
+        data = _usage_response()
+        del data["extra_usage"]
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=data
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        names = {w.name for w in status.windows}
+        assert "Extra Usage" not in names
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extra_usage_exceeds_limit(self, tmp_path, monkeypatch):
+        """used_credits can exceed monthly_limit."""
+        import llm_monitor.config as config_mod
+        monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
+
+        provider = _make_provider(tmp_path, alpha=True)
+
+        data = _usage_response()
+        data["extra_usage"] = {
+            "is_enabled": True,
+            "monthly_limit": 10000,
+            "used_credits": 10010.0,
+            "utilization": 100.0,
+        }
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=data
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        extra = next(w for w in status.windows if w.name == "Extra Usage")
+        assert extra.raw_value == pytest.approx(100.10)
+        assert extra.raw_limit == pytest.approx(100.00)
+        assert extra.utilisation == 100.0
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_alpha_warning_emitted(self, tmp_path, monkeypatch, capfd):
+        """Alpha warning is emitted to stderr when extra usage parsed."""
+        import llm_monitor.config as config_mod
+        monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
+
+        provider = _make_provider(tmp_path, alpha=True)
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
+        async with httpx.AsyncClient() as client:
+            await provider.fetch_usage(client)
+
+        captured = capfd.readouterr()
+        assert "alpha features are enabled" in captured.err.lower()
+
+
+# ---------------------------------------------------------------------------
+# Extras dict
+# ---------------------------------------------------------------------------
+
+
+class TestExtras:
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extras_with_extra_usage_alpha(self, tmp_path, monkeypatch):
+        """Extras dict includes spend/limit when alpha enabled."""
+        import llm_monitor.config as config_mod
+        monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
+
+        provider = _make_provider(tmp_path, alpha=True)
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        assert status.extras["extra_usage_enabled"] is True
+        assert status.extras["extra_usage_spent"] == pytest.approx(42.50)
+        assert status.extras["extra_usage_limit"] == pytest.approx(100.00)
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extras_without_alpha(self, tmp_path):
+        """Extras shows enabled status but no spend/limit without alpha."""
+        provider = _make_provider(tmp_path, alpha=False)
+
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=_usage_response()
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        assert status.extras["extra_usage_enabled"] is True
+        assert "extra_usage_spent" not in status.extras
+
+    @respx.mock
+    @pytest.mark.asyncio
+    async def test_extras_extra_usage_null(self, tmp_path):
+        """Extras shows null when extra_usage absent from response."""
+        provider = _make_provider(tmp_path)
+
+        data = _usage_response()
+        del data["extra_usage"]
+        respx.get("https://api.anthropic.com/api/oauth/usage").respond(
+            200, json=data
+        )
+
+        async with httpx.AsyncClient() as client:
+            status = await provider.fetch_usage(client)
+
+        assert status.extras["extra_usage_enabled"] is None

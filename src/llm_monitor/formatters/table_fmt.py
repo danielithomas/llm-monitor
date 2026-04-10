@@ -58,6 +58,8 @@ def _format_value_and_reset(window: UsageWindow) -> str:
     val = window.raw_value or 0.0
     if window.unit == "usd":
         formatted = f"${val:,.2f}"
+    elif window.unit == "credits":
+        formatted = f"${val:,.2f}"
     elif window.unit == "count":
         formatted = f"{int(val)}"
     elif window.unit == "mb":
@@ -126,7 +128,7 @@ def format_table(
         # Window rows
         for window in status.windows:
             name_text = Text(f"  {window.name}")
-            if window.unit in ("usd", "count", "mb"):
+            if window.unit in ("usd", "credits", "count", "mb"):
                 bar = Text(" " * _BAR_WIDTH)
             else:
                 bar = _build_bar(window.utilisation, window.status, colour)

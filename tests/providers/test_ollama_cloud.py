@@ -119,8 +119,8 @@ class TestAlphaGating:
     @pytest.mark.asyncio
     async def test_alpha_warning_emitted(self, monkeypatch, capfd):
         """Alpha feature warning is printed to stderr."""
-        import llm_monitor.providers.ollama as ollama_mod
-        monkeypatch.setattr(ollama_mod, "_alpha_warning_emitted", False)
+        import llm_monitor.config as config_mod
+        monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
 
         provider = _make_cloud_provider(monkeypatch)
         _mock_local_host()
