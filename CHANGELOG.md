@@ -5,6 +5,26 @@ All notable changes to llm-monitor are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.0] - 2026-04-10
+
+### Added
+
+- **Ollama provider** (`providers/ollama.py`) — local instance monitoring with model inventory, loaded model state, VRAM/RAM usage reporting
+- Multi-host support: single `host` config or `[[providers.ollama.hosts]]` array for monitoring multiple Ollama instances across a network
+- Per-host polling via `GET /api/tags` (model inventory + health) and `GET /api/ps` (loaded models + memory allocation)
+- Cloud model detection via `:cloud` tag suffix in model names (labelling only)
+- Error isolation per host — one host being unreachable does not affect others
+- **Alpha features framework** (D-053) — `enable_alpha_features` config flag gates unstable data sources with stderr warning, `alpha: true` labelling in extras, and graceful failure
+- Ollama Cloud session/weekly usage windows (alpha) — probes `ollama.com/api/account/usage` when `cloud_enabled = true` and alpha flag set
+- Cloud API key authentication via credential chain (`api_key_command` > `api_key_env`/`$OLLAMA_API_KEY` > keyring)
+- `is_alpha_enabled()` config helper for providers to check alpha flag
+- `[providers.ollama]` config section with `host`/`hosts` mutual exclusivity validation
+- Research report: `docs/research/ollama-v0.7.0-research.md`
+
+### Fixed
+
+- Table and monitor formatters now render count and MB values (e.g. "3", "5,086 MB") instead of showing "0%" for non-percentage usage windows
+
 ## [0.6.0] - 2026-04-10
 
 ### Added
