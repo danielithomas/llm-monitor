@@ -134,12 +134,20 @@ def format_compact_line(
     # Show the first (primary) window
     if status.windows:
         w = status.windows[0]
+        val = w.raw_value or 0.0
         if w.unit == "usd":
             bar = Text(" " * _COMPACT_BAR_WIDTH)
-            val = w.raw_value or 0.0
             val_str = f" ${val:,.2f}"
             line.append_text(bar)
             line.append(val_str, style=STATUS_COLOURS.get(w.status, "white"))
+        elif w.unit == "count":
+            bar = Text(" " * _COMPACT_BAR_WIDTH)
+            line.append_text(bar)
+            line.append(f" {int(val)}", style=STATUS_COLOURS.get(w.status, "white"))
+        elif w.unit == "mb":
+            bar = Text(" " * _COMPACT_BAR_WIDTH)
+            line.append_text(bar)
+            line.append(f" {val:,.0f} MB", style=STATUS_COLOURS.get(w.status, "white"))
         else:
             bar = _build_bar(w.utilisation, w.status, width=_COMPACT_BAR_WIDTH)
             pct = f" {w.utilisation:5.1f}%"
@@ -198,10 +206,16 @@ def _build_provider_panel(
     for window in status.windows:
         name = Text(f"  {window.name}")
         style = STATUS_COLOURS.get(window.status, "white")
+        val = window.raw_value or 0.0
         if window.unit == "usd":
             bar = Text(" " * _BAR_WIDTH)
-            val = window.raw_value or 0.0
             pct = Text(f"${val:,.2f}", style=style)
+        elif window.unit == "count":
+            bar = Text(" " * _BAR_WIDTH)
+            pct = Text(f"{int(val):>5}", style=style)
+        elif window.unit == "mb":
+            bar = Text(" " * _BAR_WIDTH)
+            pct = Text(f"{val:,.0f} MB", style=style)
         else:
             bar = _build_bar(window.utilisation, window.status)
             pct = Text(f"{window.utilisation:5.1f}%", style=style)
