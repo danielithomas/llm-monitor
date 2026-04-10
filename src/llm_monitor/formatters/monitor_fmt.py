@@ -140,6 +140,10 @@ def format_compact_line(
             val_str = f" ${val:,.2f}"
             line.append_text(bar)
             line.append(val_str, style=STATUS_COLOURS.get(w.status, "white"))
+        elif w.unit == "credits":
+            bar = Text(" " * _COMPACT_BAR_WIDTH)
+            line.append_text(bar)
+            line.append(f" ${val:,.2f}", style=STATUS_COLOURS.get(w.status, "white"))
         elif w.unit == "count":
             bar = Text(" " * _COMPACT_BAR_WIDTH)
             line.append_text(bar)
@@ -208,6 +212,9 @@ def _build_provider_panel(
         style = STATUS_COLOURS.get(window.status, "white")
         val = window.raw_value or 0.0
         if window.unit == "usd":
+            bar = Text(" " * _BAR_WIDTH)
+            pct = Text(f"${val:,.2f}", style=style)
+        elif window.unit == "credits":
             bar = Text(" " * _BAR_WIDTH)
             pct = Text(f"${val:,.2f}", style=style)
         elif window.unit == "count":

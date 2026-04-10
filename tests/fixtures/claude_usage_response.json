@@ -11,6 +11,17 @@
     "utilization": 12.0,
     "resets_at": "2026-04-08T00:00:00+00:00"
   },
+  "seven_day_sonnet": {
+    "utilization": 5.0,
+    "resets_at": "2026-04-08T00:00:00+00:00"
+  },
   "seven_day_oauth_apps": null,
-  "iguana_necktie": null
+  "seven_day_cowork": null,
+  "iguana_necktie": null,
+  "extra_usage": {
+    "is_enabled": true,
+    "monthly_limit": 10000,
+    "used_credits": 4250.0,
+    "utilization": 42.5
+  }
 }

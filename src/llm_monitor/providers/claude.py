@@ -10,6 +10,7 @@ from typing import Optional
 
 import httpx
 
+from llm_monitor.config import emit_alpha_warning, is_alpha_enabled
 from llm_monitor.models import ProviderStatus, SecretStr, UsageWindow, compute_status
 from llm_monitor.providers.base import Provider
 from llm_monitor.providers import register_provider
@@ -209,6 +210,7 @@ class ClaudeProvider(Provider):
 
         thresholds = self._config.get("thresholds")
         windows = self._parse_windows(data, thresholds)
+        extras = self._parse_extras(data)
 
         return ProviderStatus(
             provider_name=self.name(),
@@ -217,6 +219,7 @@ class ClaudeProvider(Provider):
             cached=False,
             cache_age_seconds=0,
             windows=windows,
+            extras=extras,
         )
 
     def _parse_windows(
@@ -229,6 +232,8 @@ class ClaudeProvider(Provider):
             "five_hour": "Session (5h)",
             "seven_day": "Weekly (7d)",
             "seven_day_opus": "Weekly Opus (7d)",
+            "seven_day_sonnet": "Weekly Sonnet (7d)",
+            "seven_day_cowork": "Weekly Cowork (7d)",
         }
 
         for key, display in window_map.items():
@@ -253,7 +258,44 @@ class ClaudeProvider(Provider):
                 )
             )
 
+        # Extra usage (alpha — D-053)
+        if is_alpha_enabled(self._config):
+            extra = data.get("extra_usage")
+            if extra and extra.get("is_enabled"):
+                emit_alpha_warning()
+                utilisation = extra.get("utilization", 0.0)
+                limit_cents = extra.get("monthly_limit", 0)
+                spent_cents = extra.get("used_credits", 0.0)
+
+                status = compute_status(utilisation, thresholds)
+                windows.append(
+                    UsageWindow(
+                        name="Extra Usage",
+                        utilisation=utilisation,
+                        resets_at=None,
+                        status=status,
+                        unit="percent",
+                        raw_value=spent_cents / 100.0,
+                        raw_limit=limit_cents / 100.0,
+                    )
+                )
+
         return windows
+
+    def _parse_extras(self, data: dict) -> dict:
+        """Build the extras dict from the API response."""
+        extras: dict = {}
+
+        extra = data.get("extra_usage")
+        if extra is None:
+            extras["extra_usage_enabled"] = None
+        else:
+            extras["extra_usage_enabled"] = extra.get("is_enabled", False)
+            if extra.get("is_enabled") and is_alpha_enabled(self._config):
+                extras["extra_usage_spent"] = extra.get("used_credits", 0.0) / 100.0
+                extras["extra_usage_limit"] = extra.get("monthly_limit", 0) / 100.0
+
+        return extras
 
     def auth_instructions(self) -> str:
         return (

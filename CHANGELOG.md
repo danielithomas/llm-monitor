@@ -5,6 +5,22 @@ All notable changes to llm-monitor are documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.7.1] - 2026-04-10
+
+### Added
+
+- **Claude extra usage spend** (alpha) — tracks dollar spend beyond the subscription cap via undocumented `extra_usage` field in `/api/oauth/usage` response
+- Extra Usage window with percentage utilisation, raw spend and limit in user's billing currency
+- `extras` dict includes `extra_usage_enabled`, `extra_usage_spent`, `extra_usage_limit`
+- **Weekly Sonnet (7d)** window — new per-model utilisation window from Claude API (`seven_day_sonnet`)
+- **`credits` unit type** in formatters — displays as `$X.XX` with no currency qualifier, for values in the user's billing currency
+- Alpha warning utility (`emit_alpha_warning`) extracted to `config.py` as shared infrastructure for all alpha providers
+
+### Changed
+
+- Claude test fixture updated with `seven_day_sonnet`, `seven_day_cowork`, and `extra_usage` fields matching current API response
+- OQ-001, OQ-002, OQ-004, OQ-008 closed with research findings in SPEC.md
+
 ## [0.7.0] - 2026-04-10
 
 ### Added

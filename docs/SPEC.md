@@ -384,11 +384,35 @@ The backoff state is persisted in the provider's cache file so it survives proce
 - Claude Code manages token refresh automatically; llm-monitor is a read-only consumer (see Section 7.7).
 - On token expiry, the tool emits a clear error directing the user to run `claude /login`.
 
-**Extra usage spend:** No REST endpoint exists. Deferred (see OQ-001).
+**Extra usage spend (alpha — D-053, v0.7.1):** The existing `/api/oauth/usage` endpoint returns an `extra_usage` object when extra usage is enabled on the account:
 
-**Extras dict:** `{ "plan": null, "extra_usage_enabled": null }` (plan detection deferred to OQ-006).
+```json
+{
+  "extra_usage": {
+    "is_enabled": true,
+    "monthly_limit": 10000,
+    "used_credits": 10010.0,
+    "utilization": 100.0
+  }
+}
+```
 
-**Per-model breakdown:** The Claude usage endpoint does not provide a per-model token breakdown. The `seven_day_opus` window provides an Opus-specific utilisation percentage, which is mapped as a separate `UsageWindow`. The `model_usage` list will contain an entry for Opus (derived from the Opus window) but Sonnet usage can only be inferred as the difference between the all-models weekly window and the Opus window. If Anthropic expands the endpoint to include per-model detail, the provider will populate `model_usage` accordingly.
+- `is_enabled`: whether the account has extra usage turned on
+- `monthly_limit`: spending cap in cents (user's billing currency, not necessarily USD)
+- `used_credits`: amount consumed in cents (`used_credits` can exceed `monthly_limit`)
+- `utilization`: percentage of limit consumed (0–100%)
+
+Since the endpoint is undocumented and the `extra_usage` field could be removed or changed without notice, this is gated behind `enable_alpha_features` (D-053). The currency is the user's billing currency (no currency identifier in the API response), so values are displayed with a generic `$` symbol using the `"credits"` unit type.
+
+**Mapped extra usage window (alpha):**
+
+| Window | Source | Unit | Notes |
+|--------|--------|------|-------|
+| Extra Usage | `extra_usage.utilization` | percent | Percentage of monthly limit consumed. `raw_value` = `used_credits / 100`, `raw_limit` = `monthly_limit / 100`. Only when `is_enabled` and alpha flag set. |
+
+**Extras dict:** `{ "extra_usage_enabled": true/false/null, "extra_usage_spent": 100.10, "extra_usage_limit": 100.00 }` (dollar values derived from cents). `extra_usage_enabled` is `null` when `extra_usage` is absent from the response. Spend/limit fields only present when extra usage is enabled and alpha flag is set.
+
+**Per-model breakdown:** The Claude usage endpoint does not provide a per-model token breakdown. The `seven_day_opus` and `seven_day_sonnet` windows provide per-model utilisation percentages, which are mapped as separate `UsageWindow` entries. If Anthropic expands the endpoint to include per-model detail, the provider will populate `model_usage` accordingly.
 
 **Allowed hosts:** `api.anthropic.com` (HTTPS only).
 
@@ -2005,14 +2029,14 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 | ID | Question | Impact | Relates To | Status |
 |----|----------|--------|------------|--------|
-| OQ-001 | **How to surface Claude extra usage spend data?** No REST API exists. Options: (a) Playwright scrape of `claude.ai/settings/usage`; (b) leave as "not available" with web link; (c) wait for Anthropic to expose an endpoint; **(d) ship behind `enable_alpha_features` flag (D-053) using undocumented endpoints or scraping, with clear warnings.** | High | Claude | Open — leaning towards (d) |
-| OQ-002 | **Is the `/api/oauth/usage` endpoint stable enough to depend on?** Undocumented, aggressively rate-limited. Could change or be removed. | High | Claude | Open |
+| ~~OQ-001~~ | ~~**How to surface Claude extra usage spend data?**~~ The existing `/api/oauth/usage` endpoint already returns an `extra_usage` object with `is_enabled`, `monthly_limit` (cents in user's billing currency), `used_credits`, and `utilization` (0–100%). No scraping needed. Ship behind `enable_alpha_features` (D-053) since the endpoint is undocumented. | High | Claude | **Closed (v0.7.1 research):** Data is in the existing endpoint response. Parse `extra_usage` field. |
+| ~~OQ-002~~ | ~~**Is the `/api/oauth/usage` endpoint stable enough to depend on?**~~ Undocumented and aggressively rate-limited (~5 requests per token, then persistent 429s with no `Retry-After`). Anthropic closed bug reports as NOT_PLANNED. The existing provider already depends on it with exponential backoff — extra usage parsing adds no additional API calls. | High | Claude | **Closed (v0.7.1 research):** Already depended upon. Backoff handles rate limits. |
 | OQ-003 | **Should Claude token refresh be self-managed or rely on Claude Code?** Self-refreshing is more robust but adds complexity and credential file conflict risk. | Medium | Claude | **Closed (D-036):** Read-only consumer. Self-refresh introduces race conditions with Claude Code's Node.js process. |
-| OQ-004 | **What is the actual rate limit on the Claude usage endpoint?** No documentation exists. Empirical testing needed. | Medium | Claude | Open |
+| ~~OQ-004~~ | ~~**What is the actual rate limit on the Claude usage endpoint?**~~ Approximately 5 requests per access token, then persistent 429s. No `Retry-After` header. Refreshing the token resets the counter but disrupts Claude Code's session. Community issues: [#31021](https://github.com/anthropics/claude-code/issues/31021), [#31637](https://github.com/anthropics/claude-code/issues/31637). | Medium | Claude | **Closed (v0.7.1 research):** ~5 req/token, handled by existing backoff. |
 | OQ-005 | **Multi-account support?** Should the tool support multiple credentials per provider (e.g., work vs personal Claude accounts)? | Low (v1) | All | Open |
 | OQ-006 | **Claude plan detection?** The usage endpoint doesn't return plan type (Pro, Max5, Max20). Infer from thresholds or require user config? | Low | Claude | Open |
 | ~~OQ-007~~ | ~~**Tmux/status-bar integration format?** A `--compact` single-line output could feed tmux `status-right`, polybar, waybar. What format is most useful?~~ | ~~Low (v1)~~ | ~~Output~~ | **Closed (D-045):** `--compact` is a `--monitor`-only modifier rendering one plain-text line per provider. Tmux polling uses `--now` with external formatting. No JSON waybar variant in v0.4.0. |
-| OQ-008 | **What does `utilization > 100` look like in Claude's API?** Does it exceed 100 when using extra usage, or cap at 100 with a separate indicator? | Medium | Claude | Open |
+| ~~OQ-008~~ | ~~**What does `utilization > 100` look like in Claude's API?**~~ Extra usage has its own `extra_usage.utilization` field (0–100%, capped at cap). `used_credits` can exceed `monthly_limit` (e.g. 10010 > 10000). The subscription windows (`five_hour`, `seven_day`) remain separate percentage fields unaffected by extra usage. | Medium | Claude | **Closed (v0.7.1 research):** Separate `extra_usage` object, `used_credits` can exceed `monthly_limit`. |
 | OQ-009 | **GTK4 vs GTK3 for v2?** GTK4 + libadwaita is modern GNOME, but AppIndicator3 is GTK3. May need bridging or alternative tray approach. | Medium (v2) | GTK | Open |
 | ~~OQ-010~~ | ~~**Licensing?** MIT vs GPL. MIT is simpler; GPL aligns with GNOME ecosystem.~~ | ~~Low~~ | ~~All~~ | **Closed:** MIT license committed to repo. `pyproject.toml` updated accordingly. |
 | ~~OQ-011~~ | ~~**Does xAI have a programmatic billing/usage API?** Console shows spend, but no documented REST endpoint for querying balance or MTD cost found. Rate limit headers provide per-request data only.~~ | ~~High~~ | ~~Grok~~ | **Closed:** Yes. The xAI Management API (`management-api.x.ai`) provides full billing, spend, usage analytics, prepaid balance, and spending limit endpoints. Requires a separate Management Key (not the inference API key) and team ID. See updated Section 3.2. |
@@ -2064,7 +2088,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-002 | **Pluggable provider architecture with abstract base class.** | Enables incremental delivery (Claude first, others later) without refactoring core. Third-party providers possible in future. | 2026-04-05 | Accepted |
 | D-003 | **JSON as default output mode (no flag required).** | Unix philosophy - default output is machine-parseable. Human-readable output is opt-in via `--now` or `--monitor`. | 2026-04-05 | Accepted |
 | D-004 | **Global poll interval (10m default) with per-provider override.** | Cloud usage data changes slowly; 10 minutes is sufficient for Claude, OpenAI, Grok, and avoids Claude's aggressive rate limiting. Local providers (Ollama, Local) override to 60s. A single `poll_interval` replaces the former `cache_ttl` + `refresh_interval` split. | 2026-04-06 | Accepted |
-| D-005 | **Claude extra usage spend available as alpha feature.** | No clean API exists. Scraping is fragile. The utilisation percentages cover the primary use case. However, rather than deferring indefinitely, this can ship behind `enable_alpha_features` (D-053). Alpha implementation may use undocumented endpoints or scraping, with clear warnings. Graduates to stable when Anthropic exposes an official endpoint. See OQ-001. Tracked as [#19](https://github.com/danielithomas/llm-monitor/issues/19) for v0.7.1. | 2026-04-10 | Accepted |
+| D-005 | **Claude extra usage spend available as alpha feature.** | The existing `/api/oauth/usage` endpoint returns an `extra_usage` object with `is_enabled`, `monthly_limit` (cents), `used_credits`, and `utilization` (0–100%). No scraping needed — just parse an additional field from the existing response. Gated behind `enable_alpha_features` (D-053) since the endpoint is undocumented. Values are in the user's billing currency (not necessarily USD), displayed using `"credits"` unit type. Graduates to stable when Anthropic documents the endpoint. See OQ-001. Tracked as [#19](https://github.com/danielithomas/llm-monitor/issues/19) for v0.7.1. | 2026-04-10 | Accepted |
 | D-006 | **Use `rich` for terminal output.** | Progress bars, tables, colour, Live display with minimal code. Widely used, well-maintained. | 2026-04-05 | Accepted |
 | D-007 | **Follow XDG Base Directory specification.** | Config in `~/.config/llm-monitor/`, cache in `~/.cache/llm-monitor/`. Standard Linux practice. | 2026-04-05 | Accepted |
 | D-008 | **Lightweight base install with additive extras.** | Base install includes cloud providers only (no compiled C extensions). `[local]` adds psutil/pynvml for GPU metrics. `[gtk]` adds PyGObject. `[all]` adds everything. Extras are additive, not subtractive — this is how pip extras actually work. | 2026-04-05 | Accepted |
@@ -2426,6 +2450,34 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 **Documentation:**
 - [x] README.md update — add Ollama to supported providers list, single-host and multi-host configuration examples, VRAM and RAM monitoring explanation, no credentials required note for local, cloud usage monitoring as alpha feature with setup instructions
+
+### v0.7.1 - Claude Extra Usage Spend (Alpha)
+
+**Core (behind `enable_alpha_features`, D-053):**
+- [x] Parse `extra_usage` object from `/api/oauth/usage` response (`is_enabled`, `monthly_limit`, `used_credits`, `utilization`)
+- [x] Create "Extra Usage" `UsageWindow` with `unit="percent"`, `raw_value` (spent in dollars), `raw_limit` (limit in dollars) — only when `is_enabled` and alpha flag set
+- [x] Populate extras dict with `extra_usage_enabled`, `extra_usage_spent`, `extra_usage_limit`
+- [x] Skip gracefully when `extra_usage` is `null` or absent from response
+- [x] Alpha feature stderr warning reuses existing `_emit_alpha_warning` pattern from Ollama provider (extract to shared utility)
+
+**New response fields:**
+- [x] Parse `seven_day_sonnet` window (new per-model window, same structure as `seven_day_opus`)
+- [x] Handle `seven_day_cowork` window if non-null (shared/team usage)
+
+**Formatters:**
+- [x] Add `"credits"` unit support to `table_fmt.py` `_format_value_and_reset()` — display as `$X.XX` (generic dollar, no currency qualifier)
+- [x] Add `"credits"` unit support to `table_fmt.py` bar rendering — no percentage bar for credits
+- [x] Add `"credits"` unit support to `monitor_fmt.py` `_build_provider_panel()` — display as `$X.XX`
+- [x] Add `"credits"` unit support to `monitor_fmt.py` `format_compact_line()` — display as `$X.XX`
+
+**Tests:**
+- [x] `test_providers/test_claude.py` — extra usage parsing (enabled, disabled, absent), alpha gating, `used_credits` exceeding `monthly_limit`, cents-to-dollars conversion, extras dict population
+- [x] `test_providers/test_claude.py` — `seven_day_sonnet` window parsing
+- [x] `test_formatters/` or existing formatter tests — `"credits"` unit renders as `$X.XX` in table and monitor
+
+**Documentation:**
+- [x] README.md alpha features section — update Claude extra usage description from "planned" to active, add setup instructions
+- [x] CHANGELOG.md entry
 
 ### v0.8.0 - Local System Metrics Provider
 

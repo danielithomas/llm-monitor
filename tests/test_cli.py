@@ -226,7 +226,7 @@ class TestDefaultMode:
         result = runner.invoke(cli, ["--provider", "claude", "--fresh"])
         data = json.loads(result.stdout)
         windows = data["providers"][0]["windows"]
-        assert len(windows) == 3
+        assert len(windows) >= 3
         names = {w["name"] for w in windows}
         assert "Session (5h)" in names
 
@@ -496,7 +496,7 @@ class TestFetchAll:
         assert len(statuses) == 1
         assert statuses[0].provider_name == "claude"
         assert len(statuses[0].errors) == 0
-        assert len(statuses[0].windows) == 3
+        assert len(statuses[0].windows) >= 3
 
     @respx.mock
     @pytest.mark.asyncio

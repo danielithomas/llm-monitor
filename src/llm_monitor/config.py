@@ -175,6 +175,22 @@ def is_alpha_enabled(config: dict) -> bool:
     return bool(config.get("general", {}).get("enable_alpha_features", False))
 
 
+# Module-level flag: emit the alpha warning at most once per process.
+_alpha_warning_emitted = False
+
+
+def emit_alpha_warning() -> None:
+    """Print a one-time alpha feature warning to stderr."""
+    global _alpha_warning_emitted
+    if not _alpha_warning_emitted:
+        print(
+            "Warning: Alpha features are enabled. Some data sources are "
+            "unstable and may break between releases.",
+            file=sys.stderr,
+        )
+        _alpha_warning_emitted = True
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge *override* into a copy of *base*.
 
