@@ -1,0 +1,49 @@
+{
+  "models": [
+    {
+      "name": "gemma3:latest",
+      "model": "gemma3:latest",
+      "modified_at": "2026-04-08T10:30:00Z",
+      "size": 3346018048,
+      "digest": "a2af6cc3eb8f4e3e2f4d4a9f5b6c7d8e9f0a1b2c",
+      "details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "gemma3",
+        "families": ["gemma3"],
+        "parameter_size": "4.3B",
+        "quantization_level": "Q4_K_M"
+      }
+    },
+    {
+      "name": "llama3.2:3b",
+      "model": "llama3.2:3b",
+      "modified_at": "2026-04-07T14:20:00Z",
+      "size": 2019266048,
+      "digest": "b3cf7dd4fc9a5e4f3a5b6c7d8e9f0a1b2c3d4e5f",
+      "details": {
+        "parent_model": "",
+        "format": "gguf",
+        "family": "llama",
+        "families": ["llama"],
+        "parameter_size": "3.2B",
+        "quantization_level": "Q4_0"
+      }
+    },
+    {
+      "name": "deepseek-v3.2:cloud",
+      "model": "deepseek-v3.2:cloud",
+      "modified_at": "2026-04-09T08:00:00Z",
+      "size": 0,
+      "digest": "c4d08ee5fd0b6f5a4b6c7d8e9f0a1b2c3d4e5f6a",
+      "details": {
+        "parent_model": "",
+        "format": "",
+        "family": "deepseek",
+        "families": ["deepseek"],
+        "parameter_size": "671B",
+        "quantization_level": ""
+      }
+    }
+  ]
+}
