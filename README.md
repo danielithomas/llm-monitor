@@ -2,7 +2,7 @@
 
 Monitor your LLM consumption from local and online services.
 
-Currently supports **Anthropic Claude** (subscription utilisation tracking), **xAI Grok** (spend monitoring, spending limits, prepaid balance), and **OpenAI** (API spend and per-model usage via Admin API). Future versions will add Ollama and local system metrics.
+Currently supports **Anthropic Claude** (subscription utilisation tracking), **xAI Grok** (spend monitoring, spending limits, prepaid balance), **OpenAI** (API spend and per-model usage via Admin API), and **Ollama** (local instance monitoring — loaded models, VRAM/RAM usage, multi-host support; cloud usage tracking as an alpha feature). Future versions will add local system metrics.
 
 ## Quick Start
 
@@ -140,6 +140,88 @@ The OpenAI provider uses the Administration API, which requires an **Admin API K
 
 Standard project keys (`sk-proj-*`) do **not** have access to the Usage or Costs APIs.
 
+### Ollama
+
+The Ollama provider monitors local (and network) Ollama instances. **No credentials are required** for local monitoring.
+
+1. Install [Ollama](https://ollama.com/download) and start it: `ollama serve`
+2. Enable in config: set `[providers.ollama] enabled = true`
+
+Ollama is polled every 60 seconds by default (configurable via `poll_interval`).
+
+**Monitored data:**
+- **Models Available** — total downloaded models per host
+- **Models Loaded** — models currently in memory
+- **VRAM Usage** — GPU memory allocated to loaded models
+- **RAM Usage** — system RAM allocated to loaded models
+- **Cloud model detection** — models with `:cloud` suffix are identified
+
+**Multi-host monitoring:** Monitor multiple Ollama instances across your network:
+
+```toml
+[providers.ollama]
+enabled = true
+
+[[providers.ollama.hosts]]
+name = "workstation"
+url = "http://localhost:11434"
+
+[[providers.ollama.hosts]]
+name = "gpu-server"
+url = "http://gpu-server.local:11434"
+```
+
+## Alpha Features
+
+Some monitoring data is only available via undocumented or unstable interfaces (web scraping, unversioned API endpoints). These features are gated behind a global opt-in flag and may break between releases without notice.
+
+To enable:
+
+```toml
+[general]
+enable_alpha_features = true
+```
+
+When alpha features are active, the tool emits a one-time warning to stderr per session. Alpha-sourced data is flagged in JSON output (`"alpha": true` in the extras dict).
+
+### Ollama Cloud Usage (v0.7.0)
+
+Tracks session and weekly quota consumption for Ollama Cloud subscribers. Requires an Ollama account with a cloud plan (Free, Pro, or Max).
+
+**Setup:**
+
+1. Sign in to your Ollama account: `ollama signin`
+2. Create an API key at [ollama.com/settings/keys](https://ollama.com/settings/keys)
+3. Set the environment variable: `export OLLAMA_API_KEY="your_key"`
+4. Enable in config:
+
+```toml
+[general]
+enable_alpha_features = true
+
+[providers.ollama]
+enabled = true
+host = "http://localhost:11434"    # local instance (always works)
+cloud_enabled = true               # enable cloud usage tracking (alpha)
+api_key_env = "OLLAMA_API_KEY"     # default, can be omitted
+# api_key_command = "pass show llm-monitor/ollama-cloud"
+```
+
+**Why alpha?** Ollama does not yet offer a programmatic API for cloud usage data ([ollama/ollama#12532](https://github.com/ollama/ollama/issues/12532)). This feature probes for an expected endpoint and falls back to scraping. It will graduate to stable when Ollama ships an official usage API.
+
+**What it monitors:**
+- Session usage (% consumed, resets every 5 hours)
+- Weekly usage (% consumed, resets every 7 days)
+- Plan type (Free / Pro / Max)
+
+Local instance monitoring (models loaded, VRAM, health) is **not** an alpha feature — it uses stable, documented APIs and works without `enable_alpha_features`.
+
+### Claude Extra Usage Spend (planned — v0.7.1, [#19](https://github.com/danielithomas/llm-monitor/issues/19))
+
+Tracks dollar spend for Claude usage beyond the subscription cap. No additional credentials needed — uses the existing Claude Code OAuth token.
+
+**Why alpha?** No REST API exists for extra usage data. The implementation will use undocumented endpoints or web scraping. It will graduate to stable when Anthropic exposes an official endpoint.
+
 ## Configuration
 
 Config file location: `~/.config/llm-monitor/config.toml`
@@ -150,6 +232,7 @@ The tool works with zero configuration — Claude is enabled by default. Create 
 [general]
 default_providers = ["claude"]
 poll_interval = 600              # 10 minutes
+# enable_alpha_features = false  # opt-in to unstable data sources (see Alpha Features)
 
 [thresholds]
 warning = 70
@@ -171,6 +254,13 @@ management_key_env = "XAI_MANAGEMENT_KEY"
 enabled = false
 admin_key_env = "OPENAI_ADMIN_KEY"       # Admin key (sk-admin-*), NOT project key
 # admin_key_command = "pass show llm-monitor/openai-admin"
+
+[providers.ollama]
+enabled = false
+poll_interval = 60               # local service, can poll more frequently
+host = "http://localhost:11434"
+# cloud_enabled = false          # requires enable_alpha_features = true
+# api_key_env = "OLLAMA_API_KEY"
 
 [history]
 enabled = true

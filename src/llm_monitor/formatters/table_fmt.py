@@ -52,11 +52,16 @@ def _format_value_and_reset(window: UsageWindow) -> str:
     """Format the value and reset-time suffix for a window row.
 
     For percentage windows, shows ``42%``.  For USD windows, shows
-    ``$1,450.00`` from ``raw_value``.
+    ``$1,450.00`` from ``raw_value``.  For count/mb windows, shows
+    the raw value with appropriate suffix.
     """
+    val = window.raw_value or 0.0
     if window.unit == "usd":
-        val = window.raw_value or 0.0
         formatted = f"${val:,.2f}"
+    elif window.unit == "count":
+        formatted = f"{int(val)}"
+    elif window.unit == "mb":
+        formatted = f"{val:,.0f} MB"
     else:
         formatted = f"{window.utilisation:.0f}%"
     human = format_resets_in_human(window.resets_at)
@@ -121,7 +126,7 @@ def format_table(
         # Window rows
         for window in status.windows:
             name_text = Text(f"  {window.name}")
-            if window.unit == "usd":
+            if window.unit in ("usd", "count", "mb"):
                 bar = Text(" " * _BAR_WIDTH)
             else:
                 bar = _build_bar(window.utilisation, window.status, colour)

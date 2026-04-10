@@ -556,13 +556,13 @@ These are merged into `ModelUsage` entries with both token counts and costs. Thi
 
 ---
 
-### 3.4 Ollama (Network / Local) - v0.5.0
+### 3.4 Ollama (Network / Local / Cloud) - v0.7.0
 
-**Type:** Local and network inference performance monitoring
+**Type:** Local and network inference performance monitoring + cloud usage tracking (alpha)
 
 **Data source:** Ollama REST API (one or more endpoints)
 
-**Authentication:** None (local/network service). No credentials required.
+**Authentication:** None for local/network instances. Cloud models require an Ollama account (`ollama signin`) or API key (`$OLLAMA_API_KEY`) — see Section 3.4.1.
 
 **Multi-host support:** The tool supports monitoring multiple Ollama instances across the local network. Each host is a separate logical endpoint but reports under the same provider. This is common in homelab setups where inference is distributed across machines (e.g., a workstation with an RTX 5080 running one set of models and a secondary server with an RTX 3090 running others).
 
@@ -596,18 +596,26 @@ When multiple hosts are configured, each host's models and metrics are reported 
 
 | Endpoint | Data | Notes |
 |----------|------|-------|
-| `GET /api/tags` | List of available models | Health check |
-| `GET /api/ps` | Currently loaded models, VRAM usage | Real-time state |
-| `GET /metrics` | Prometheus-format metrics (if enabled) | Not available in all versions |
-| Response `usage` fields | Per-request token counts and timing | `eval_count`, `eval_duration`, etc. |
+| `GET /` | Liveness probe ("Ollama is running") | Simplest health check |
+| `GET /api/version` | `{"version": "0.12.6"}` | Version/compatibility check |
+| `GET /api/tags` | List of downloaded + cloud models | Model inventory, health check |
+| `GET /api/ps` | Currently loaded models, VRAM/RAM usage, expiry | Real-time state (local models only — cloud models do not appear) |
+| `POST /api/show` | Model metadata, capabilities, architecture | Not called in poll loop (POST per model, slow). On-demand enrichment only. |
 
-**Mapped usage windows (planned):**
+**Mapped usage windows:**
 
 | Window | Source | Unit | Notes |
 |--------|--------|------|-------|
-| Models Loaded | `/api/ps` (all hosts) | count | Total models in memory across all hosts |
-| VRAM Usage | `/api/ps` (per host) | MB/GB | Memory allocated per host |
-| Inference Speed | Aggregated from responses | tokens/sec | Rolling average tokens/second |
+| Models Available | `/api/tags` (per host) | count | Total downloaded models per host |
+| Models Loaded | `/api/ps` (per host) | count | Models currently in memory per host |
+| VRAM Usage | `/api/ps` `size_vram` (per host) | bytes → MB | GPU memory allocated per host. `size_vram` omitted when CPU-only ([#4840](https://github.com/ollama/ollama/issues/4840)) — treat as 0. |
+| RAM Usage | `/api/ps` `size - size_vram` (per host) | bytes → MB | System RAM per host (derived) |
+
+**Deferred windows (no polling endpoint — per-request only):**
+
+| Window | Source | Unit | Notes |
+|--------|--------|------|-------|
+| ~~Inference Speed~~ | ~~Response `eval_count/eval_duration`~~ | ~~tokens/sec~~ | Deferred — only available in inference response bodies, not from a polling endpoint |
 
 **Extras dict:**
 ```json
@@ -617,27 +625,74 @@ When multiple hosts are configured, each host's models and metrics are reported 
       "name": "workstation",
       "url": "http://localhost:11434",
       "status": "connected",
-      "models_loaded": ["llama3.2:3b"],
-      "vram_used_mb": 4096,
-      "vram_total_mb": 16384,
-      "avg_tokens_per_sec": 45.2
-    },
-    {
-      "name": "gpu-server",
-      "url": "http://gpu-server.local:11434",
-      "status": "connected",
-      "models_loaded": ["mistral:7b", "codellama:13b"],
-      "vram_used_mb": 18432,
-      "vram_total_mb": 24576,
-      "avg_tokens_per_sec": 38.1
+      "version": "0.12.6",
+      "models_available": 5,
+      "models_loaded": [
+        {
+          "name": "gemma3:latest",
+          "parameter_size": "4.3B",
+          "quantization": "Q4_K_M",
+          "size_bytes": 6591830464,
+          "size_vram_bytes": 5333539264,
+          "context_length": 4096,
+          "expires_at": "2025-10-17T16:47:07Z"
+        }
+      ],
+      "total_vram_used_mb": 5085,
+      "total_ram_used_mb": 1200
     }
-  ]
+  ],
+  "cloud": {
+    "status": "authenticated",
+    "plan": "pro",
+    "alpha": true,
+    "session_used_pct": 4.0,
+    "session_resets_at": "2026-04-10T15:00:00Z",
+    "weekly_used_pct": 14.3,
+    "weekly_resets_at": "2026-04-13T02:00:00Z"
+  }
 }
 ```
 
-**Note:** Ollama's monitoring story is fundamentally different from cloud providers. There are no quotas or spend limits - it is a performance and resource utilisation monitor. The provider maps to the same `ProviderStatus` structure but uses resource-oriented windows rather than quota-oriented ones.
+The `cloud` section is only present when `enable_alpha_features = true` and `cloud_enabled = true`. It is `null` or absent otherwise.
 
-**Allowed hosts:** `localhost`, `127.0.0.1`, `[::1]`, or any user-configured host in the `hosts` array (HTTP or HTTPS). Network hosts are trusted by configuration - the user explicitly adds them.
+**Note:** Ollama's local monitoring story is fundamentally different from cloud providers. There are no quotas or spend limits — it is a performance and resource utilisation monitor. The provider maps to the same `ProviderStatus` structure but uses resource-oriented windows rather than quota-oriented ones.
+
+**Allowed hosts:** `localhost`, `127.0.0.1`, `[::1]`, or any user-configured host in the `hosts` array (HTTP or HTTPS). Network hosts are trusted by configuration — the user explicitly adds them. Cloud API uses `ollama.com` (HTTPS only).
+
+#### 3.4.1 Ollama Cloud Models (Alpha — D-053)
+
+Since September 2025 (Ollama v0.12), Ollama offers **cloud models** — large models (DeepSeek V3 671B, Qwen3-Coder 480B, GPT-OSS 120B, etc.) that run on Ollama's datacenter GPU infrastructure. Cloud model names include `cloud` in their tag (e.g. `gpt-oss:120b-cloud`, `deepseek-v3.2:cloud`).
+
+**Pricing tiers:**
+
+| Plan | Price | Concurrent Cloud Models | Cloud Usage |
+|------|-------|------------------------|-------------|
+| Free | $0 | 1 | Light allowance |
+| Pro | $20/mo ($200/yr) | 3 | 50x Free |
+| Max | $100/mo | 10 | 5x Pro |
+
+Usage is measured by **GPU time** (not tokens). Session limits reset every 5 hours; weekly limits reset every 7 days. Local model usage is always unlimited. Additional per-token usage is "coming soon."
+
+**Authentication:**
+- **CLI:** `ollama signin` (SSH key challenge-response with ollama.com account)
+- **API keys:** Created at `ollama.com/settings/keys`. Set via `$OLLAMA_API_KEY`. Used as `Authorization: Bearer <key>`. Keys do not expire but can be revoked.
+- **Disable cloud:** Set `OLLAMA_NO_CLOUD=1` to reject cloud model requests.
+
+**Cloud usage windows (alpha):**
+
+| Window | Source | Unit | Notes |
+|--------|--------|------|-------|
+| Session Usage | `ollama.com/api/account/usage` (proposed) | percent | Resets every 5 hours |
+| Weekly Usage | `ollama.com/api/account/usage` (proposed) | percent | Resets every 7 days |
+
+**Critical limitation:** There is **no official API endpoint** for cloud usage data. Usage stats are only visible at `ollama.com/settings` in the browser. The community has been requesting a `/api/account/usage` or `/api/me` endpoint since October 2025 ([ollama/ollama#12532](https://github.com/ollama/ollama/issues/12532)). Until this ships, cloud usage monitoring is gated behind `enable_alpha_features` (D-053) and may use undocumented interfaces or web scraping.
+
+**Rate limiting:** When session or weekly limits are exceeded, the API returns HTTP 429 with a `Retry-After` header. The existing exponential backoff logic (D-041) applies.
+
+**Cloud models do NOT appear in `/api/ps`** — they have no local process or VRAM allocation. They are proxied on-demand to Ollama's infrastructure. Cloud models are detected by the `cloud` substring in the model tag from `/api/tags`.
+
+See `docs/research/ollama-v0.7.0-research.md` for the full research report, API response structures, and community monitoring landscape.
 
 ---
 
@@ -1058,6 +1113,7 @@ These variables take precedence over XDG defaults and config file values. They a
 default_providers = ["claude"]
 poll_interval = 600              # 10 minutes; applies to all providers unless overridden
 notification_enabled = false
+enable_alpha_features = false    # opt-in to unstable data sources (see D-053)
 
 [thresholds]
 warning = 70
@@ -1114,6 +1170,11 @@ host = "http://localhost:11434"
 # [[providers.ollama.hosts]]
 # name = "gpu-server"
 # url = "http://gpu-server.local:11434"
+# Cloud usage monitoring (requires enable_alpha_features = true)
+# cloud_enabled = false
+# api_key_env = "OLLAMA_API_KEY"   # default env var for cloud API key
+# api_key_command = "pass show llm-monitor/ollama-cloud"
+# cloud_poll_interval = 300        # cloud quota checks, 5 min default
 
 # ─── Provider: Local System ───────────────────────────────────
 [providers.local]
@@ -1609,7 +1670,8 @@ Use `fcntl.flock()` (advisory locking) when reading/writing cache files to preve
 | Claude | `api.anthropic.com` | HTTPS only |
 | OpenAI | `api.openai.com` | HTTPS only |
 | Grok | `management-api.x.ai`, `api.x.ai` | HTTPS only |
-| Ollama | `localhost`, `127.0.0.1`, `[::1]`, or user-configured host | HTTP or HTTPS |
+| Ollama (local) | `localhost`, `127.0.0.1`, `[::1]`, or user-configured host | HTTP or HTTPS |
+| Ollama (cloud) | `ollama.com` | HTTPS only |
 
 ### 7.6 Process Security
 
@@ -1943,7 +2005,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 | ID | Question | Impact | Relates To | Status |
 |----|----------|--------|------------|--------|
-| OQ-001 | **How to surface Claude extra usage spend data?** No REST API exists. Options: (a) Playwright scrape of `claude.ai/settings/usage`; (b) leave as "not available" with web link; (c) wait for Anthropic to expose an endpoint. | High | Claude | Open |
+| OQ-001 | **How to surface Claude extra usage spend data?** No REST API exists. Options: (a) Playwright scrape of `claude.ai/settings/usage`; (b) leave as "not available" with web link; (c) wait for Anthropic to expose an endpoint; **(d) ship behind `enable_alpha_features` flag (D-053) using undocumented endpoints or scraping, with clear warnings.** | High | Claude | Open — leaning towards (d) |
 | OQ-002 | **Is the `/api/oauth/usage` endpoint stable enough to depend on?** Undocumented, aggressively rate-limited. Could change or be removed. | High | Claude | Open |
 | OQ-003 | **Should Claude token refresh be self-managed or rely on Claude Code?** Self-refreshing is more robust but adds complexity and credential file conflict risk. | Medium | Claude | **Closed (D-036):** Read-only consumer. Self-refresh introduces race conditions with Claude Code's Node.js process. |
 | OQ-004 | **What is the actual rate limit on the Claude usage endpoint?** No documentation exists. Empirical testing needed. | Medium | Claude | Open |
@@ -1955,7 +2017,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | ~~OQ-010~~ | ~~**Licensing?** MIT vs GPL. MIT is simpler; GPL aligns with GNOME ecosystem.~~ | ~~Low~~ | ~~All~~ | **Closed:** MIT license committed to repo. `pyproject.toml` updated accordingly. |
 | ~~OQ-011~~ | ~~**Does xAI have a programmatic billing/usage API?** Console shows spend, but no documented REST endpoint for querying balance or MTD cost found. Rate limit headers provide per-request data only.~~ | ~~High~~ | ~~Grok~~ | **Closed:** Yes. The xAI Management API (`management-api.x.ai`) provides full billing, spend, usage analytics, prepaid balance, and spending limit endpoints. Requires a separate Management Key (not the inference API key) and team ID. See updated Section 3.2. |
 | ~~OQ-012~~ | ~~**OpenAI billing endpoint stability?** `/v1/dashboard/billing/subscription` and `/v1/dashboard/billing/credit_grants` are undocumented but widely used. The official Usage API (`/v1/organization/usage/...`) requires admin-level access.~~ | ~~Medium~~ | ~~OpenAI~~ | **Closed:** Confirmed. The undocumented `/v1/dashboard/billing/*` endpoints are dead — they require browser session keys as of late 2025. The official Usage API and Costs API (`/v1/organization/usage/*`, `/v1/organization/costs`) require an Admin API Key (`sk-admin-*`), not a standard project key. No programmatic credit balance API exists. See updated Section 3.3. |
-| OQ-013 | **Ollama metrics endpoint availability?** Ollama does not have a built-in `/metrics` Prometheus endpoint in all versions. The proxy approach (ollama-metrics) is an alternative but adds a dependency. Should we support both paths? | Medium | Ollama | Open |
+| ~~OQ-013~~ | ~~**Ollama metrics endpoint availability?** Ollama does not have a built-in `/metrics` Prometheus endpoint in all versions. The proxy approach (ollama-metrics) is an alternative but adds a dependency. Should we support both paths?~~ | ~~Medium~~ | ~~Ollama~~ | **Closed (D-053 research):** No native `/metrics` endpoint exists ([#3144](https://github.com/ollama/ollama/issues/3144) still open). Do not depend on it. Use `/api/ps` + `/api/tags` for local monitoring. Document ollama-metrics as an optional external integration. |
 | OQ-014 | **AMD GPU support depth?** `pyamdgpuinfo` is limited. `rocm-smi` subprocess parsing is more complete but slower. What level of AMD support is needed? | Low | Local | Open |
 | ~~OQ-015~~ | ~~**Provider plugin system: entry_points vs explicit registration?** Entry points allow third-party providers but add packaging complexity. Explicit registration in a registry dict is simpler for v1.~~ | ~~Low~~ | ~~Architecture~~ | **Closed:** Explicit registration via `@register_provider` decorator and module-level dict for v1. See Section 2.2. |
 | ~~OQ-016~~ | ~~**Unified cost normalisation?** Should the tool attempt to normalise costs across providers (e.g., all in USD) or keep each in its native unit? Normalisation is complex; native units are honest.~~ | ~~Low~~ | ~~Output~~ | **Closed (D-013):** Each provider keeps its native units. |
@@ -1982,7 +2044,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | A-004 | The `anthropic-beta: oauth-2025-04-20` header value will remain valid or a successor discoverable. | API calls fail. Monitor Claude Code releases for changes. | Claude |
 | A-005 | Python 3.10+ is available on target Linux distributions (Ubuntu 22.04+, Fedora 36+, Arch current). | Older distros need `pyenv` or container. | All |
 | ~~A-006~~ | ~~OpenAI's `/v1/organization/usage/completions` endpoint is accessible with a standard API key (not just admin keys).~~ | ~~If admin-only, fall back to undocumented billing endpoints.~~ | ~~OpenAI~~ | *Falsified. Both Usage and Costs APIs require an Admin API Key (`sk-admin-*`) with `api.usage.read` scope. The undocumented billing endpoints are also dead. Provider now requires admin key. See OQ-012 closure and updated Section 3.3.* |
-| A-007 | Ollama runs on `localhost:11434` by default and the `/api/ps` and `/api/tags` endpoints are stable. | Ollama API changes would require updates. These endpoints have been stable for 2+ years. | Ollama |
+| A-007 | Ollama runs on `localhost:11434` by default and the `/api/ps` and `/api/tags` endpoints are stable. Ollama Cloud uses `ollama.com` with API key auth. Cloud models are identified by a `cloud` tag suffix. | Ollama API changes would require updates. Local endpoints have been stable for 2+ years. Cloud usage API does not yet exist ([#12532](https://github.com/ollama/ollama/issues/12532)). | Ollama |
 | A-008 | NVIDIA GPU monitoring via `pynvml` works on Linux with standard NVIDIA drivers installed. | If driver mismatch, GPU metrics fail gracefully. | Local |
 | ~~A-009~~ | ~~Rate limiting on Claude's usage endpoint is per-token, not per-IP. Running alongside Claude Code's own polling won't cause mutual 429s.~~ | ~~If per-IP, concurrent polling could cause interference.~~ | ~~Claude~~ | *Superseded by D-004 (10m poll interval) and D-041 (exponential backoff). Design is now robust regardless of rate-limit scope.* |
 | A-010 | xAI's rate limit response headers (`x-ratelimit-remaining-requests`, `x-ratelimit-remaining-tokens`, etc.) are present on `/v1/chat/completions` responses but NOT on `/v1/models` or Management API responses. Verified 2026-04-08. | Rate limit headers are supplementary only; primary data comes from the Management API. The provider works without them. | Grok |
@@ -2002,7 +2064,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-002 | **Pluggable provider architecture with abstract base class.** | Enables incremental delivery (Claude first, others later) without refactoring core. Third-party providers possible in future. | 2026-04-05 | Accepted |
 | D-003 | **JSON as default output mode (no flag required).** | Unix philosophy - default output is machine-parseable. Human-readable output is opt-in via `--now` or `--monitor`. | 2026-04-05 | Accepted |
 | D-004 | **Global poll interval (10m default) with per-provider override.** | Cloud usage data changes slowly; 10 minutes is sufficient for Claude, OpenAI, Grok, and avoids Claude's aggressive rate limiting. Local providers (Ollama, Local) override to 60s. A single `poll_interval` replaces the former `cache_ttl` + `refresh_interval` split. | 2026-04-06 | Accepted |
-| D-005 | **Defer Claude extra usage spend to future release.** | No clean API exists. Scraping is fragile. The utilisation percentages cover the primary use case. Revisit when OQ-001 is resolved. | 2026-04-05 | Proposed |
+| D-005 | **Claude extra usage spend available as alpha feature.** | No clean API exists. Scraping is fragile. The utilisation percentages cover the primary use case. However, rather than deferring indefinitely, this can ship behind `enable_alpha_features` (D-053). Alpha implementation may use undocumented endpoints or scraping, with clear warnings. Graduates to stable when Anthropic exposes an official endpoint. See OQ-001. Tracked as [#19](https://github.com/danielithomas/llm-monitor/issues/19) for v0.7.1. | 2026-04-10 | Accepted |
 | D-006 | **Use `rich` for terminal output.** | Progress bars, tables, colour, Live display with minimal code. Widely used, well-maintained. | 2026-04-05 | Accepted |
 | D-007 | **Follow XDG Base Directory specification.** | Config in `~/.config/llm-monitor/`, cache in `~/.cache/llm-monitor/`. Standard Linux practice. | 2026-04-05 | Accepted |
 | D-008 | **Lightweight base install with additive extras.** | Base install includes cloud providers only (no compiled C extensions). `[local]` adds psutil/pynvml for GPU metrics. `[gtk]` adds PyGObject. `[all]` adds everything. Extras are additive, not subtractive — this is how pip extras actually work. | 2026-04-05 | Accepted |
@@ -2051,6 +2113,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-050 | **Provider health indicator thresholds based on poll_interval multiples.** | Green `●` = data age ≤ 1× poll_interval (healthy). Yellow `●` = data age > 1× but ≤ 3× poll_interval (stale — daemon may have missed a cycle). Red `●` = data age > 3× poll_interval OR provider has errors. poll_interval read from config (default 600s, per-provider override respected). | 2026-04-08 | Accepted |
 | D-051 | **`--notify` deferred to v0.9.0. No flag added in v0.4.0.** | The spec's roadmap places notifications at v0.9.0. Adding a dead flag creates confusion. Desktop notification support arrives with the notification engine. | 2026-04-08 | Accepted |
 | D-052 | **OpenAI provider requires Admin API Key (`sk-admin-*`), not a standard project key.** | The Usage API and Costs API both require the `api.usage.read` scope, which is only available on admin keys. Standard project keys (`sk-proj-*`) return 403. The undocumented `/v1/dashboard/billing/*` endpoints are dead (require browser session keys since late 2025). No credit balance API exists. Env var: `$OPENAI_ADMIN_KEY`. Only Organisation Owners can create admin keys. See OQ-012. | 2026-04-10 | Accepted |
+| D-053 | **`enable_alpha_features` flag for unstable data sources.** | Some monitoring data (Ollama Cloud usage quotas, Claude extra usage spend) is only available via undocumented endpoints, web scraping, or APIs that may change without notice. Rather than deferring these features indefinitely or shipping them as stable, a global `enable_alpha_features = true` config flag gates access. Alpha features: (a) emit a stderr warning on first use per session, (b) label alpha-sourced windows/metrics with an `alpha: true` flag in extras, (c) fail gracefully — errors are swallowed, never fatal, (d) are documented as potentially breaking between releases. This allows power users to opt in while managing expectations. Applies to: Ollama Cloud session/weekly usage (no official API — [ollama/ollama#12532](https://github.com/ollama/ollama/issues/12532)), Claude extra usage spend (no REST API — OQ-001). When a data source graduates to a stable API, the feature moves out from behind the flag. | 2026-04-10 | Accepted |
 
 ---
 
@@ -2326,21 +2389,43 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 ### v0.7.0 - Ollama Provider
 
-- [ ] Ollama provider implementation
-- [ ] Multi-host support (single `host` and `[[providers.ollama.hosts]]` array forms)
-- [ ] Per-host status, model listing, and VRAM reporting
-- [ ] `/api/ps` for loaded models and VRAM
-- [ ] `/api/tags` for health check
-- [ ] Response metrics aggregation (tokens/sec rolling average)
-- [ ] Per-model token tracking via response `usage` fields written to `model_usage` table
-- [ ] Optional Prometheus `/metrics` integration
-- [ ] Config section for Ollama
+**Config:**
+- [x] `config.py` — parse `enable_alpha_features` from `[general]` (default: `false`)
+- [x] `config.py` — parse `[providers.ollama]` section: `host`, `hosts` (array form), `poll_interval`, `cloud_enabled`, `api_key_env`, `api_key_command`, `cloud_poll_interval`
+- [x] `config.py` — validate mutual exclusivity of `host` (simple) vs `hosts` (array) forms
+- [x] `config.py` — expose `is_alpha_enabled()` helper for providers to check
+
+**Core (local instance monitoring — stable):**
+- [x] Ollama provider implementation with `@register_provider`
+- [x] Multi-host support (single `host` and `[[providers.ollama.hosts]]` array forms)
+- [x] Per-host polling: `GET /api/tags` (model inventory + health), `GET /api/ps` (loaded models + VRAM)
+- [x] Per-host status, model listing, VRAM/RAM reporting
+- [x] Error isolation per host (one host down doesn't affect others)
+- [x] `is_configured()` always true when at least one host is set (no credentials needed for local)
+- [x] Cloud model detection via `cloud` tag in model names (labelling only)
+- [x] Config section for Ollama (local + cloud-ready structure)
+
+**Alpha (cloud usage monitoring — behind `enable_alpha_features`, D-053):**
+- [x] `enable_alpha_features` flag in `[general]` config, read by `config.py`
+- [x] Alpha feature stderr warning on first use per session
+- [x] Ollama Cloud session/weekly usage windows (when `cloud_enabled = true` and alpha flag set)
+- [x] Cloud API key authentication via credential chain (`api_key_command` > `api_key_env`/`$OLLAMA_API_KEY` > keyring)
+- [x] Probe for `/api/account/usage` endpoint (use if available, graceful failure if not)
+- [ ] Fallback: scrape `ollama.com/settings` via authenticated request (cookie or API key)
+- [x] Alpha-sourced windows flagged with `alpha: true` in extras dict
+
+**Deferred:**
+- [ ] Inference speed / tokens-per-second rolling average (no polling endpoint — per-request only)
+- [ ] Per-model token tracking from response `usage` fields (requires proxy/middleware)
+- [ ] Prometheus `/metrics` integration (no native endpoint — see OQ-013)
 
 **Tests:**
-- [ ] `test_providers/test_ollama.py` — single-host response parsing (`/api/ps`, `/api/tags`), multi-host config with per-host labels, host unreachable → error for that host only (other hosts unaffected), VRAM mapping to UsageWindow, tokens/sec rolling average calculation, no credentials required (is_configured always true when host set), mocked HTTP via `respx`
+- [x] `test_providers/test_ollama.py` — single-host response parsing (`/api/ps`, `/api/tags`), multi-host config with per-host labels, host unreachable → error for that host only (other hosts unaffected), VRAM/RAM mapping to UsageWindow, cloud model detection from tag names, no credentials required for local (is_configured always true when host set), mocked HTTP via `respx`
+- [x] `test_providers/test_ollama_cloud.py` — cloud usage window parsing, alpha feature gating (disabled when flag off), API key authentication, graceful failure when cloud endpoint unavailable, mocked HTTP via `respx`
+- [x] `test_config.py` — `enable_alpha_features` flag loading and default (false)
 
 **Documentation:**
-- [ ] README.md update — add Ollama to supported providers list, single-host and multi-host configuration examples, VRAM and inference speed monitoring explanation, no credentials required note
+- [x] README.md update — add Ollama to supported providers list, single-host and multi-host configuration examples, VRAM and RAM monitoring explanation, no credentials required note for local, cloud usage monitoring as alpha feature with setup instructions
 
 ### v0.8.0 - Local System Metrics Provider
 
@@ -2543,9 +2628,16 @@ Without a health endpoint, `daemon status` exit code (0 = running, non-zero = no
 
 | Source | URL |
 |--------|-----|
-| Ollama usage metrics docs | https://docs.ollama.com/api/usage |
+| Ollama Cloud docs | https://docs.ollama.com/cloud |
+| Ollama pricing | https://ollama.com/pricing |
+| Ollama per-response usage fields (not an aggregate API) | https://docs.ollama.com/api/usage |
+| Ollama API reference (GitHub) | https://github.com/ollama/ollama/blob/main/docs/api.md |
+| Ollama authentication docs | https://docs.ollama.com/api/authentication |
+| Cloud usage stats feature request | https://github.com/ollama/ollama/issues/12532 |
+| Account Usage API Endpoint request | https://github.com/ollama/ollama/issues/15132 |
 | ollama-metrics (Prometheus proxy) | https://github.com/NorskHelsenett/ollama-metrics |
 | Metrics endpoint feature request | https://github.com/ollama/ollama/issues/3144 |
+| v0.7.0 research report | docs/research/ollama-v0.7.0-research.md |
 
 ### Security and CLI Best Practices
 

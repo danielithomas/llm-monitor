@@ -23,6 +23,7 @@ DEFAULT_CONFIG: dict = {
         "default_providers": ["claude"],
         "poll_interval": 600,
         "notification_enabled": False,
+        "enable_alpha_features": False,
     },
     "thresholds": {
         "warning": 70,
@@ -42,6 +43,14 @@ DEFAULT_CONFIG: dict = {
         "openai": {
             "enabled": False,
             "admin_key_env": "OPENAI_ADMIN_KEY",
+        },
+        "ollama": {
+            "enabled": False,
+            "poll_interval": 60,
+            "host": "http://localhost:11434",
+            "cloud_enabled": False,
+            "api_key_env": "OLLAMA_API_KEY",
+            "cloud_poll_interval": 300,
         },
     },
     "history": {
@@ -161,6 +170,11 @@ def get_cache_dir() -> Path:
     return Path.home() / ".cache" / "llm-monitor"
 
 
+def is_alpha_enabled(config: dict) -> bool:
+    """Check whether alpha features are enabled in the configuration."""
+    return bool(config.get("general", {}).get("enable_alpha_features", False))
+
+
 def _deep_merge(base: dict, override: dict) -> dict:
     """Recursively merge *override* into a copy of *base*.
 
@@ -214,5 +228,13 @@ def load_config(path: str | None = None) -> dict:
         warnings = check_file_permissions(str(config_path))
         for warning in warnings:
             print(warning, file=sys.stderr)
+
+    # Validate Ollama host/hosts mutual exclusivity (check user config, not merged)
+    user_ollama = user_config.get("providers", {}).get("ollama", {})
+    if "hosts" in user_ollama and "host" in user_ollama:
+        raise ValueError(
+            "Ollama config error: 'host' and 'hosts' are mutually exclusive.\n"
+            "Use 'host' for a single instance or 'hosts' for multiple instances."
+        )
 
     return _deep_merge(DEFAULT_CONFIG, user_config)

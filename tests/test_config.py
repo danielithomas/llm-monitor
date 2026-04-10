@@ -18,6 +18,7 @@ from llm_monitor.config import (
     get_pid_dir,
     get_pid_file,
     get_state_file,
+    is_alpha_enabled,
     load_config,
 )
 
@@ -51,6 +52,15 @@ class TestDefaultConfig:
         assert DEFAULT_CONFIG["general"]["default_providers"] == ["claude"]
         assert DEFAULT_CONFIG["general"]["poll_interval"] == 600
         assert DEFAULT_CONFIG["general"]["notification_enabled"] is False
+        assert DEFAULT_CONFIG["general"]["enable_alpha_features"] is False
+
+    def test_provider_ollama_defaults(self):
+        ollama = DEFAULT_CONFIG["providers"]["ollama"]
+        assert ollama["enabled"] is False
+        assert ollama["poll_interval"] == 60
+        assert ollama["host"] == "http://localhost:11434"
+        assert ollama["cloud_enabled"] is False
+        assert ollama["api_key_env"] == "OLLAMA_API_KEY"
 
     def test_threshold_defaults(self):
         assert DEFAULT_CONFIG["thresholds"]["warning"] == 70
@@ -394,3 +404,71 @@ class TestDaemonConfig:
         monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
         config = {"daemon": {}}
         assert get_state_file(config) == Path("/run/user/1000/llm-monitor/daemon.state")
+
+
+# ---------------------------------------------------------------------------
+# is_alpha_enabled
+# ---------------------------------------------------------------------------
+
+class TestIsAlphaEnabled:
+    def test_default_is_false(self):
+        assert is_alpha_enabled(DEFAULT_CONFIG) is False
+
+    def test_enabled_when_set(self):
+        config = {"general": {"enable_alpha_features": True}}
+        assert is_alpha_enabled(config) is True
+
+    def test_disabled_when_false(self):
+        config = {"general": {"enable_alpha_features": False}}
+        assert is_alpha_enabled(config) is False
+
+    def test_missing_general_section(self):
+        assert is_alpha_enabled({}) is False
+
+    def test_loaded_from_toml(self, tmp_path, monkeypatch):
+        _clean_config_env(monkeypatch)
+        config_file = tmp_path / "alpha.toml"
+        config_file.write_text(
+            '[general]\nenable_alpha_features = true\n'
+        )
+        config = load_config(str(config_file))
+        assert is_alpha_enabled(config) is True
+
+
+# ---------------------------------------------------------------------------
+# Ollama host/hosts mutual exclusivity
+# ---------------------------------------------------------------------------
+
+class TestOllamaHostValidation:
+    def test_host_and_hosts_raises(self, tmp_path, monkeypatch):
+        """Setting both host and hosts in config raises ValueError."""
+        _clean_config_env(monkeypatch)
+        config_file = tmp_path / "bad_ollama.toml"
+        config_file.write_text(
+            '[providers.ollama]\n'
+            'enabled = true\n'
+            'host = "http://localhost:11434"\n'
+            '\n'
+            '[[providers.ollama.hosts]]\n'
+            'name = "gpu"\n'
+            'url = "http://gpu:11434"\n'
+        )
+        with pytest.raises(ValueError, match="mutually exclusive"):
+            load_config(str(config_file))
+
+    def test_hosts_only_is_valid(self, tmp_path, monkeypatch):
+        """Using only hosts array is valid."""
+        _clean_config_env(monkeypatch)
+        config_file = tmp_path / "hosts_only.toml"
+        config_file.write_text(
+            '[providers.ollama]\n'
+            'enabled = true\n'
+            '\n'
+            '[[providers.ollama.hosts]]\n'
+            'name = "gpu"\n'
+            'url = "http://gpu:11434"\n'
+        )
+        config = load_config(str(config_file))
+        hosts = config["providers"]["ollama"]["hosts"]
+        assert len(hosts) == 1
+        assert hosts[0]["name"] == "gpu"

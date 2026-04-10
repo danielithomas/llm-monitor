@@ -1,0 +1,11 @@
+{
+  "plan": "pro",
+  "session": {
+    "used_percent": 4.0,
+    "resets_at": "2026-04-10T15:00:00+00:00"
+  },
+  "weekly": {
+    "used_percent": 14.3,
+    "resets_at": "2026-04-13T02:00:00+00:00"
+  }
+}
