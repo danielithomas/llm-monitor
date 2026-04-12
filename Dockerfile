@@ -12,6 +12,9 @@ RUN useradd --create-home --shell /bin/bash monitor
 COPY --from=builder /tmp/dist/*.whl /tmp/
 RUN pip install --no-cache-dir /tmp/*.whl && rm -f /tmp/*.whl
 
+# Create data directory owned by monitor before switching user
+RUN mkdir -p /data/cache && chown -R monitor:monitor /data
+
 USER monitor
 
 # Default data directory
