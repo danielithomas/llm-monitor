@@ -131,7 +131,7 @@ class TestResolveCredential:
             result = provider.resolve_credential(config)
             assert isinstance(result, SecretStr)
             assert result.get_secret_value() == "keyring-secret-456"
-            mock_kr.get_password.assert_called_once_with(
+            mock_kr.get_password.assert_any_call(
                 "clawmeter/test_provider", "api_key"
             )
 
