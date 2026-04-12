@@ -15,6 +15,11 @@ def main() -> None:
     except (AttributeError, OSError):
         pass  # Windows doesn't have SIGPIPE
 
+    from clawmeter.migrate import migrate_xdg_directories, warn_old_env_vars
+
+    warn_old_env_vars()
+    migrate_xdg_directories()
+
     from clawmeter.cli import cli
 
     try:

@@ -752,6 +752,7 @@ class TestReport:
     def test_report_json_format(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
         monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -805,6 +806,7 @@ class TestReport:
     def test_report_with_models(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
         monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -832,6 +834,7 @@ class TestReport:
         """--report on the default command should work like 'history report'."""
         db_path = tmp_path / "data" / "history.db"
         monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -966,6 +969,7 @@ class TestExport:
     def test_export_cli_jsonl(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
         monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_store(store)
