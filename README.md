@@ -1,6 +1,18 @@
-# clawmeter
+<p align="center">
+  <img src="assets/clawmeter.png" alt="clawmeter" width="200">
+</p>
 
-Monitor your LLM consumption from local and online services.
+<h1 align="center">clawmeter</h1>
+
+<p align="center">
+  <em>Monitor your LLM consumption from local and online services.</em>
+</p>
+
+<p align="center">
+  <a href="https://pypi.org/project/clawmeter/"><img src="https://img.shields.io/pypi/v/clawmeter.svg" alt="PyPI"></a>
+  <a href="https://pypi.org/project/clawmeter/"><img src="https://img.shields.io/pypi/pyversions/clawmeter.svg" alt="Python"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+</p>
 
 Currently supports **Anthropic Claude** (subscription utilisation tracking), **xAI Grok** (spend monitoring, spending limits, prepaid balance), **OpenAI** (API spend and per-model usage via Admin API), and **Ollama** (local instance monitoring — loaded models, VRAM/RAM usage, multi-host support; cloud usage tracking as an alpha feature). Future versions will add local system metrics.
 

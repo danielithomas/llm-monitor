@@ -2498,7 +2498,10 @@ Tracked as [#24](https://github.com/danielithomas/clawmeter/issues/24).
 
 Tracked as [#25](https://github.com/danielithomas/clawmeter/issues/25).
 
-- [ ] Publish `clawmeter` package to PyPI
+- [x] Add logo and PyPI/Python/licence badges to README.md
+- [x] Create `.github/workflows/publish.yml` — tag-triggered build and publish via trusted publishing
+- [ ] Configure PyPI trusted publisher (GitHub environment `pypi` + PyPI pending publisher)
+- [ ] Tag `v0.7.4` to trigger first PyPI release
 - [ ] Verify `uv tool install clawmeter` and `pip install clawmeter` work from PyPI
 
 ### v0.8.0 - Local System Metrics Provider
