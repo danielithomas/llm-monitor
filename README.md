@@ -1,4 +1,4 @@
-# llm-monitor
+# clawmeter
 
 Monitor your LLM consumption from local and online services.
 
@@ -8,17 +8,17 @@ Currently supports **Anthropic Claude** (subscription utilisation tracking), **x
 
 ```bash
 # Install
-uv tool install llm-monitor
-# or: pip install llm-monitor
+uv tool install clawmeter
+# or: pip install clawmeter
 
 # Prerequisites: Claude Code must be installed and authenticated
 claude /login
 
 # Check your Claude usage (JSON output, default)
-llm-monitor
+clawmeter
 
 # Human-readable table
-llm-monitor --now
+clawmeter --now
 ```
 
 ### Example JSON Output
@@ -76,23 +76,23 @@ LLM Monitor                              07 Apr 2026, 10:30 AEST
 
 ```bash
 # Via uv (recommended)
-uv tool install llm-monitor
+uv tool install clawmeter
 
 # Via pip
-pip install llm-monitor --user
+pip install clawmeter --user
 ```
 
 ### Running from Source
 
 ```bash
-git clone https://github.com/danielithomas/llm-monitor.git
-cd llm-monitor
+git clone https://github.com/danielithomas/clawmeter.git
+cd clawmeter
 uv sync --group dev
 
 # Run directly
-uv run llm-monitor
-uv run llm-monitor --now
-uv run llm-monitor history stats
+uv run clawmeter
+uv run clawmeter --now
+uv run clawmeter history stats
 
 # Run tests
 uv run pytest
@@ -204,7 +204,7 @@ enabled = true
 host = "http://localhost:11434"    # local instance (always works)
 cloud_enabled = true               # enable cloud usage tracking (alpha)
 api_key_env = "OLLAMA_API_KEY"     # default, can be omitted
-# api_key_command = "pass show llm-monitor/ollama-cloud"
+# api_key_command = "pass show clawmeter/ollama-cloud"
 ```
 
 **Why alpha?** Ollama does not yet offer a programmatic API for cloud usage data ([ollama/ollama#12532](https://github.com/ollama/ollama/issues/12532)). This feature probes for an expected endpoint and falls back to scraping. It will graduate to stable when Ollama ships an official usage API.
@@ -233,7 +233,7 @@ enable_alpha_features = true
 
 ## Configuration
 
-Config file location: `~/.config/llm-monitor/config.toml`
+Config file location: `~/.config/clawmeter/config.toml`
 
 The tool works with zero configuration — Claude is enabled by default. Create a config file to customise behaviour:
 
@@ -256,13 +256,13 @@ show_opus = true
 enabled = false                  # enable when credentials are configured
 team_id = ""                     # required: xAI team ID (or set $XAI_TEAM_ID)
 management_key_env = "XAI_MANAGEMENT_KEY"
-# management_key_command = "secret-tool lookup application llm-monitor provider grok-management"
+# management_key_command = "secret-tool lookup application clawmeter provider grok-management"
 # key_env = "XAI_API_KEY"       # optional: for rate limit data
 
 [providers.openai]
 enabled = false
 admin_key_env = "OPENAI_ADMIN_KEY"       # Admin key (sk-admin-*), NOT project key
-# admin_key_command = "pass show llm-monitor/openai-admin"
+# admin_key_command = "pass show clawmeter/openai-admin"
 
 [providers.ollama]
 enabled = false
@@ -280,15 +280,15 @@ Override paths via environment variables:
 
 | Variable | Overrides |
 |----------|-----------|
-| `LLM_MONITOR_CONFIG` | Config file path |
-| `LLM_MONITOR_DATA_DIR` | Data directory |
-| `LLM_MONITOR_CACHE_DIR` | Cache directory |
+| `CLAWMETER_CONFIG` | Config file path |
+| `CLAWMETER_DATA_DIR` | Data directory |
+| `CLAWMETER_CACHE_DIR` | Cache directory |
 
 ## Credential Setup
 
 Credentials are **never stored in the config file**. Resolution order:
 
-1. **`key_command`** — execute a shell command (e.g., `pass show llm-monitor/openai-admin`)
+1. **`key_command`** — execute a shell command (e.g., `pass show clawmeter/openai-admin`)
 2. **Environment variable** — e.g., `$OPENAI_ADMIN_KEY`, `$XAI_API_KEY`
 3. **System keyring** — GNOME Keyring, KDE Wallet, KeePassXC via Python `keyring`
 4. **Provider credential file** — Claude only (`~/.claude/.credentials.json`)
@@ -329,7 +329,7 @@ Credentials are **never stored in the config file**. Resolution order:
 
 Usage data is recorded to a local SQLite database on every fetch where data changes meaningfully. This enables trend analysis and historical reporting.
 
-**Data location:** `~/.local/share/llm-monitor/history.db`
+**Data location:** `~/.local/share/clawmeter/history.db`
 
 ### Configuration
 
@@ -345,19 +345,19 @@ Use `--no-history` to skip recording for a single invocation.
 
 ```bash
 # Table summary of last 7 days
-llm-monitor --report
+clawmeter --report
 
 # JSON report for the last 30 days, Claude only
-llm-monitor --report --days 30 --provider claude --format json
+clawmeter --report --days 30 --provider claude --format json
 
 # CSV report with daily granularity
-llm-monitor --report --days 14 --format csv --granularity daily
+clawmeter --report --days 14 --format csv --granularity daily
 
 # Include per-model token breakdown
-llm-monitor history report --days 7 --models
+clawmeter history report --days 7 --models
 
 # Hourly granularity
-llm-monitor history report --granularity hourly --days 3
+clawmeter history report --granularity hourly --days 3
 ```
 
 **Report flags:** `--days`, `--from`, `--to`, `--format` (table/json/csv), `--granularity` (raw/hourly/daily), `--provider`, `--window`, `--models`
@@ -366,16 +366,16 @@ llm-monitor history report --granularity hourly --days 3
 
 ```bash
 # Database summary
-llm-monitor history stats
+clawmeter history stats
 
 # Export for backup
-llm-monitor history export --format jsonl > backup.jsonl
-llm-monitor history export --format csv > backup.csv
-llm-monitor history export --format sql > backup.sql
+clawmeter history export --format jsonl > backup.jsonl
+clawmeter history export --format csv > backup.csv
+clawmeter history export --format sql > backup.sql
 
 # Purge all history (requires confirmation)
-llm-monitor history purge
-llm-monitor history purge --confirm   # non-interactive
+clawmeter history purge
+clawmeter history purge --confirm   # non-interactive
 ```
 
 ## Daemon Mode
@@ -386,30 +386,30 @@ The daemon runs in the background, continuously polling providers and writing to
 
 ```bash
 # Start background daemon
-llm-monitor daemon start
+clawmeter daemon start
 
 # Run in foreground (for systemd/Docker)
-llm-monitor daemon run
+clawmeter daemon run
 
 # Check status
-llm-monitor daemon status
+clawmeter daemon status
 
 # Stop the daemon
-llm-monitor daemon stop
+clawmeter daemon stop
 
 # Install as systemd user service (auto-start on login)
-llm-monitor daemon install
+clawmeter daemon install
 
 # Remove systemd service
-llm-monitor daemon uninstall
+clawmeter daemon uninstall
 ```
 
 When the daemon is running, normal CLI commands read from the database:
 
 ```bash
-llm-monitor --now          # reads from daemon's DB
-llm-monitor --report       # reports from daemon's history
-llm-monitor --fresh        # bypass daemon, fetch directly
+clawmeter --now          # reads from daemon's DB
+clawmeter --report       # reports from daemon's history
+clawmeter --fresh        # bypass daemon, fetch directly
 ```
 
 ### Configuration
@@ -419,15 +419,15 @@ llm-monitor --fresh        # bypass daemon, fetch directly
 poll_interval = 600          # global poll interval (10 minutes)
 
 [daemon]
-log_file = ""                # empty = default (~/.local/state/llm-monitor/daemon.log)
-pid_file = ""                # empty = default ($XDG_RUNTIME_DIR/llm-monitor/daemon.pid)
+log_file = ""                # empty = default (~/.local/state/clawmeter/daemon.log)
+pid_file = ""                # empty = default ($XDG_RUNTIME_DIR/clawmeter/daemon.pid)
 
 [providers.ollama]
 poll_interval = 60           # per-provider override (local services can poll faster)
 ```
 
-**PID file:** `$XDG_RUNTIME_DIR/llm-monitor/daemon.pid` (or `/tmp/llm-monitor-<uid>/daemon.pid`)
-**Log file:** `$XDG_STATE_HOME/llm-monitor/daemon.log` (or `~/.local/state/llm-monitor/daemon.log`)
+**PID file:** `$XDG_RUNTIME_DIR/clawmeter/daemon.pid` (or `/tmp/clawmeter-<uid>/daemon.pid`)
+**Log file:** `$XDG_STATE_HOME/clawmeter/daemon.log` (or `~/.local/state/clawmeter/daemon.log`)
 
 ## Monitor Mode
 
@@ -435,16 +435,16 @@ Launch a persistent Rich Live dashboard that auto-refreshes and displays all con
 
 ```bash
 # Full dashboard
-llm-monitor --monitor
+clawmeter --monitor
 
 # Monitor a specific provider
-llm-monitor --monitor --provider claude
+clawmeter --monitor --provider claude
 
 # Compact mode (single line per provider, ideal for tmux)
-llm-monitor --monitor --compact
+clawmeter --monitor --compact
 
 # Custom refresh interval (default 30s, minimum 5s)
-llm-monitor --monitor --interval 10
+clawmeter --monitor --interval 10
 ```
 
 When the daemon is running, `--monitor` reads from the history database (no API calls). Without a daemon, it fetches directly from providers on each refresh cycle.
@@ -485,12 +485,12 @@ show_sparkline = true     # show usage sparklines from history
 
 ## Docker
 
-The daemon mode maps naturally to Docker. The container runs `llm-monitor daemon run` in the foreground.
+The daemon mode maps naturally to Docker. The container runs `clawmeter daemon run` in the foreground.
 
 ### Quick Start
 
 ```bash
-docker build -t llm-monitor .
+docker build -t clawmeter .
 docker compose up -d
 ```
 
@@ -498,12 +498,12 @@ docker compose up -d
 
 ```yaml
 services:
-  llm-monitor:
+  clawmeter:
     build: .
     restart: unless-stopped
     volumes:
-      - llm-monitor-data:/data
-      - ${HOME}/.config/llm-monitor/config.toml:/home/monitor/.config/llm-monitor/config.toml:ro
+      - clawmeter-data:/data
+      - ${HOME}/.config/clawmeter/config.toml:/home/monitor/.config/clawmeter/config.toml:ro
       - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
     environment:
       - OPENAI_ADMIN_KEY=${OPENAI_ADMIN_KEY}
@@ -512,12 +512,12 @@ services:
       - XAI_API_KEY=${XAI_API_KEY}
 
 volumes:
-  llm-monitor-data:
+  clawmeter-data:
 ```
 
 ### Container-Aware Mode
 
-When `$LLM_MONITOR_CONTAINER=1` is set (or `/.dockerenv` exists):
+When `$CLAWMETER_CONTAINER=1` is set (or `/.dockerenv` exists):
 
 - Permission checks are skipped
 - Keyring is not attempted (no D-Bus in containers)
@@ -527,28 +527,28 @@ When `$LLM_MONITOR_CONTAINER=1` is set (or `/.dockerenv` exists):
 
 ```bash
 # Point host CLI at the container's database
-export LLM_MONITOR_DATA_DIR=/path/to/docker/volume
-llm-monitor --now
-llm-monitor --report --days 7
+export CLAWMETER_DATA_DIR=/path/to/docker/volume
+clawmeter --now
+clawmeter --report --days 7
 
 # Or use docker exec
-docker exec llm-monitor llm-monitor --now
+docker exec clawmeter clawmeter --now
 ```
 
 ## Scripting Examples
 
 ```bash
 # Get Claude session utilisation as a number
-llm-monitor | jq -r '.providers[0].windows[0].utilisation'
+clawmeter | jq -r '.providers[0].windows[0].utilisation'
 
 # Alert when usage is high
-USAGE=$(llm-monitor | jq -r '.providers[0].windows[0].utilisation')
+USAGE=$(clawmeter | jq -r '.providers[0].windows[0].utilisation')
 if (( $(echo "$USAGE > 80" | bc -l) )); then
     notify-send "Claude usage high: ${USAGE}%"
 fi
 
 # Pipe to other tools
-llm-monitor | jq '.providers[].windows[] | {name, utilisation, status}'
+clawmeter | jq '.providers[].windows[] | {name, utilisation, status}'
 ```
 
 ## Security

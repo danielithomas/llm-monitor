@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-llm-monitor is a Linux-native CLI tool for monitoring LLM service usage, costs, and performance across multiple providers. It uses a pluggable provider architecture, launching with Anthropic Claude support and expanding to Grok (xAI), OpenAI, Ollama, and local system metrics. A GTK/GNOME desktop widget is planned for v2.
+clawmeter is a Linux-native CLI tool for monitoring LLM service usage, costs, and performance across multiple providers. It uses a pluggable provider architecture, launching with Anthropic Claude support and expanding to Grok (xAI), OpenAI, Ollama, and local system metrics. A GTK/GNOME desktop widget is planned for v2.
 
 The tool operates in two modes: **standalone** (CLI fetches directly) and **daemon** (background service collects, CLI reads from DB). The daemon is recommended for continuous history collection.
 
@@ -17,7 +17,7 @@ The full specification lives in `docs/SPEC.md` - consult it for detailed provide
 uv sync
 
 # Run
-uv run llm-monitor
+uv run clawmeter
 
 # Run tests
 uv run pytest
@@ -28,7 +28,7 @@ uv run pytest tests/test_security.py::test_name # single test
 uv build
 
 # Docker
-docker build -t llm-monitor .
+docker build -t clawmeter .
 docker compose up -d
 ```
 
@@ -40,7 +40,7 @@ Build backend is `hatchling` + `hatch-vcs`. Version is derived from git tags (no
 
 **Provider abstraction** is the core pattern: every LLM service implements `Provider` (ABC) with `name()`, `display_name()`, `is_configured()`, `fetch_usage()`, and `auth_instructions()`. The base class handles credential resolution. Providers return a unified `ProviderStatus` dataclass containing `UsageWindow` and `ModelUsage` entries.
 
-Key components and their locations under `src/llm_monitor/`:
+Key components and their locations under `src/clawmeter/`:
 
 - `daemon.py` - Background service: poll loop, PID file management, systemd install
 - `models.py` - `SecretStr`, `UsageWindow`, `ModelUsage`, `ProviderStatus` dataclasses
@@ -50,8 +50,8 @@ Key components and their locations under `src/llm_monitor/`:
 - `cli.py` - Click/Typer CLI with modes: JSON (default, no flag), `--now` (table), `--monitor` (Rich Live TUI)
 - `security.py` - Credential sanitisation, secure file I/O (`secure_write`, `secure_mkdir`), permission warnings
 - `cache.py` - Per-provider JSON cache (standalone mode only), `poll_interval`-based TTL, `fcntl.flock()`
-- `config.py` - TOML loader from `~/.config/llm-monitor/config.toml`, permission warnings (not hard failures)
-- `history.py` - SQLite at `~/.local/share/llm-monitor/history.db` (WAL mode), retention pruning, reporting
+- `config.py` - TOML loader from `~/.config/clawmeter/config.toml`, permission warnings (not hard failures)
+- `history.py` - SQLite at `~/.local/share/clawmeter/history.db` (WAL mode), retention pruning, reporting
 - `formatters/` - JSON, Rich table (TTY-adaptive), Rich Live TUI
 
 ## Critical Design Decisions
@@ -72,7 +72,7 @@ Key components and their locations under `src/llm_monitor/`:
 - **Provider errors are isolated** - one provider failing doesn't block others. Exit codes: 0=all ok, 1=config error, 2=all auth fail, 3=partial, 4=all network fail.
 - **Australian English in docs/UI** ("utilisation", "colour") but US English for Python API identifiers where convention requires it.
 - **Lightweight base install, additive extras** - base has no C extensions. `[local]` adds psutil/pynvml. `[gtk]` adds PyGObject. `[all]` is everything.
-- **Env var overrides for all paths** - `LLM_MONITOR_CONFIG`, `LLM_MONITOR_DATA_DIR`, `LLM_MONITOR_CACHE_DIR`. Essential for Docker.
+- **Env var overrides for all paths** - `CLAWMETER_CONFIG`, `CLAWMETER_DATA_DIR`, `CLAWMETER_CACHE_DIR`. Essential for Docker.
 
 ## Security Checklist
 
