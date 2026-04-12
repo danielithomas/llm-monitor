@@ -547,6 +547,21 @@ clawmeter --report --days 7
 docker exec clawmeter clawmeter --now
 ```
 
+## Agent Skill (Openclaw)
+
+clawmeter includes an agent skill file at `skills/openclaw.md` that enables AI coding agents to install, configure, and query clawmeter on behalf of users. The skill is designed for use with [Claude Code](https://claude.ai/code) and compatible agent platforms.
+
+**What the skill provides:**
+
+- **Guided setup** — walks users through installation, configuration, and daemon setup
+- **Usage queries** — concise summaries by default ("57% of session quota, resets in 2h"), with detailed and historical breakdowns on request
+- **Daemon management** — start, stop, status, and systemd installation
+- **Credential safety** — the agent never handles API keys or tokens directly; it instructs users to enter credentials themselves
+
+**Trigger phrases:** "what's my usage", "how much Claude have I used", "how much quota do I have left", "check my spending", and similar natural language queries about LLM usage and costs.
+
+The skill file will be available on [Clawhub.ai](https://clawhub.ai) for easy installation.
+
 ## Scripting Examples
 
 ```bash
