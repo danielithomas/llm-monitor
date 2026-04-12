@@ -80,6 +80,10 @@ class Provider(ABC):
         # Tier 3: keyring (skip in container mode — no D-Bus Secret Service)
         if not is_container_mode():
             try:
+                from clawmeter.migrate import migrate_keyring_credential
+
+                migrate_keyring_credential(self.name())
+
                 import keyring as kr
 
                 service = f"clawmeter/{self.name()}"

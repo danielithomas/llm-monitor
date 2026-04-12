@@ -16,7 +16,12 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[no-redef]
 
+from clawmeter.migrate import migrate_xdg_directories, warn_old_env_vars
 from clawmeter.security import check_file_permissions, is_container_mode, secure_mkdir
+
+# Run one-time migrations on module import.
+warn_old_env_vars()
+migrate_xdg_directories()
 
 DEFAULT_CONFIG: dict = {
     "general": {
