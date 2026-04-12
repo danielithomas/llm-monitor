@@ -1,4 +1,4 @@
-# Openclaw — clawmeter Agent Skill
+# llm-monitor — clawmeter Agent Skill
 
 TRIGGER when: user asks about LLM usage, costs, spending, quotas, remaining balance, or rate limits — for any provider (Claude, OpenAI, Grok, Ollama) or across all providers. Also when user asks about clawmeter status, setup, configuration, or daemon management. Example phrases: "what's my usage", "how much Claude have I used", "how much quota do I have left", "what are my costs", "check my spending", "am I near my limit", "usage today", "this week's spending".
 
