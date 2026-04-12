@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from llm_monitor.cli import cli
-from llm_monitor.daemon import (
+from clawmeter.cli import cli
+from clawmeter.daemon import (
     DaemonRunner,
     is_daemon_running,
     read_pid_file,
@@ -27,8 +27,8 @@ from llm_monitor.daemon import (
     write_state,
     read_state,
 )
-from llm_monitor.history import HistoryStore
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.history import HistoryStore
+from clawmeter.models import ProviderStatus, UsageWindow
 
 
 # ---------------------------------------------------------------------------
@@ -534,7 +534,7 @@ class TestDaemonCLI:
         pid_path = tmp_path / "daemon.pid"
         pid_path.write_text(str(os.getpid()))
 
-        state_path = tmp_path / "runtime" / "llm-monitor" / "daemon.state"
+        state_path = tmp_path / "runtime" / "clawmeter" / "daemon.state"
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state = {
             "started_at": datetime.now(timezone.utc).isoformat(),

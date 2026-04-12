@@ -10,10 +10,10 @@ from typing import Optional
 
 import httpx
 
-from llm_monitor.config import emit_alpha_warning, is_alpha_enabled
-from llm_monitor.models import ProviderStatus, SecretStr, UsageWindow, compute_status
-from llm_monitor.providers.base import Provider
-from llm_monitor.providers import register_provider
+from clawmeter.config import emit_alpha_warning, is_alpha_enabled
+from clawmeter.models import ProviderStatus, SecretStr, UsageWindow, compute_status
+from clawmeter.providers.base import Provider
+from clawmeter.providers import register_provider
 
 
 @register_provider
@@ -205,7 +205,7 @@ class ClaudeProvider(Provider):
         except (json.JSONDecodeError, ValueError) as exc:
             return _error_status(
                 f"Claude API returned invalid JSON: {exc}\n"
-                "This may indicate an API change. Check for llm-monitor updates."
+                "This may indicate an API change. Check for clawmeter updates."
             )
 
         thresholds = self._config.get("thresholds")

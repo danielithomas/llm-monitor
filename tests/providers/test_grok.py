@@ -9,8 +9,8 @@ import httpx
 import pytest
 import respx
 
-from llm_monitor.models import ProviderStatus
-from llm_monitor.providers.grok import GrokProvider, MANAGEMENT_API_BASE
+from clawmeter.models import ProviderStatus
+from clawmeter.providers.grok import GrokProvider, MANAGEMENT_API_BASE
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 TEAM_ID = "team-test-123"

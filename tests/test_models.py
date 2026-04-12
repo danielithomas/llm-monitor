@@ -2,7 +2,7 @@
 
 from datetime import datetime, timezone
 
-from llm_monitor.models import (
+from clawmeter.models import (
     CredentialError,
     ModelUsage,
     ProviderStatus,

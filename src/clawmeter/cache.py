@@ -1,4 +1,4 @@
-"""Per-provider cache layer for llm-monitor.
+"""Per-provider cache layer for clawmeter.
 
 Stores the latest ProviderStatus per provider on disk with TTL-based
 invalidation and advisory file locking.
@@ -14,8 +14,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from llm_monitor.models import ProviderStatus, UsageWindow
-from llm_monitor.security import secure_mkdir, secure_write
+from clawmeter.models import ProviderStatus, UsageWindow
+from clawmeter.security import secure_mkdir, secure_write
 
 
 # ---------------------------------------------------------------------------

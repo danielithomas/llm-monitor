@@ -8,8 +8,8 @@ import sys
 
 import pytest
 
-from llm_monitor.models import CredentialError, SecretStr
-from llm_monitor.security import (
+from clawmeter.models import CredentialError, SecretStr
+from clawmeter.security import (
     REDACTION_PATTERNS,
     check_file_permissions,
     is_container_mode,

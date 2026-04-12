@@ -12,11 +12,11 @@ import pytest
 import respx
 from click.testing import CliRunner
 
-from llm_monitor.cli import cli, _resolve_colour
-from llm_monitor.core import determine_exit_code, fetch_all
-from llm_monitor.cache import ProviderCache
-from llm_monitor.models import ProviderStatus, UsageWindow
-from llm_monitor.providers.claude import ClaudeProvider
+from clawmeter.cli import cli, _resolve_colour
+from clawmeter.core import determine_exit_code, fetch_all
+from clawmeter.cache import ProviderCache
+from clawmeter.models import ProviderStatus, UsageWindow
+from clawmeter.providers.claude import ClaudeProvider
 
 
 # ---------------------------------------------------------------------------
@@ -87,13 +87,13 @@ class TestVersion:
         runner = CliRunner()
         result = runner.invoke(cli, ["--version"])
         assert result.exit_code == 0
-        assert "llm-monitor" in result.output
+        assert "clawmeter" in result.output
 
     def test_short_version_flag(self):
         runner = CliRunner()
         result = runner.invoke(cli, ["-V"])
         assert result.exit_code == 0
-        assert "llm-monitor" in result.output
+        assert "clawmeter" in result.output
 
 
 # ---------------------------------------------------------------------------

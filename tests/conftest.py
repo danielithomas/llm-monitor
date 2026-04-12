@@ -1,4 +1,4 @@
-"""Shared test fixtures for llm-monitor."""
+"""Shared test fixtures for clawmeter."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_monitor.models import ModelUsage, ProviderStatus, UsageWindow
+from clawmeter.models import ModelUsage, ProviderStatus, UsageWindow
 
 FIXTURES_DIR = Path(__file__).parent / "fixtures"
 

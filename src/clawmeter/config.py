@@ -1,4 +1,4 @@
-"""Configuration loading and path resolution for llm-monitor.
+"""Configuration loading and path resolution for clawmeter.
 
 Follows XDG Base Directory specification with environment variable overrides.
 See SPEC.md Section 4.6 for the full configuration schema.
@@ -16,7 +16,7 @@ try:
 except ModuleNotFoundError:
     import tomli as tomllib  # type: ignore[no-redef]
 
-from llm_monitor.security import check_file_permissions, is_container_mode, secure_mkdir
+from clawmeter.security import check_file_permissions, is_container_mode, secure_mkdir
 
 DEFAULT_CONFIG: dict = {
     "general": {
@@ -69,8 +69,8 @@ def get_config_path() -> Path:
 
     Resolution order:
     1. ``$LLM_MONITOR_CONFIG`` environment variable
-    2. ``$XDG_CONFIG_HOME/llm-monitor/config.toml``
-    3. ``~/.config/llm-monitor/config.toml``
+    2. ``$XDG_CONFIG_HOME/clawmeter/config.toml``
+    3. ``~/.config/clawmeter/config.toml``
     """
     env_path = os.environ.get("LLM_MONITOR_CONFIG")
     if env_path:
@@ -78,9 +78,9 @@ def get_config_path() -> Path:
 
     xdg_config = os.environ.get("XDG_CONFIG_HOME")
     if xdg_config:
-        return Path(xdg_config) / "llm-monitor" / "config.toml"
+        return Path(xdg_config) / "clawmeter" / "config.toml"
 
-    return Path.home() / ".config" / "llm-monitor" / "config.toml"
+    return Path.home() / ".config" / "clawmeter" / "config.toml"
 
 
 def get_data_dir() -> Path:
@@ -88,8 +88,8 @@ def get_data_dir() -> Path:
 
     Resolution order:
     1. ``$LLM_MONITOR_DATA_DIR``
-    2. ``$XDG_DATA_HOME/llm-monitor/``
-    3. ``~/.local/share/llm-monitor/``
+    2. ``$XDG_DATA_HOME/clawmeter/``
+    3. ``~/.local/share/clawmeter/``
     """
     env_path = os.environ.get("LLM_MONITOR_DATA_DIR")
     if env_path:
@@ -97,37 +97,37 @@ def get_data_dir() -> Path:
 
     xdg_data = os.environ.get("XDG_DATA_HOME")
     if xdg_data:
-        return Path(xdg_data) / "llm-monitor"
+        return Path(xdg_data) / "clawmeter"
 
-    return Path.home() / ".local" / "share" / "llm-monitor"
+    return Path.home() / ".local" / "share" / "clawmeter"
 
 
 def get_pid_dir() -> Path:
     """Resolve the PID file directory.
 
     Resolution order:
-    1. ``$XDG_RUNTIME_DIR/llm-monitor/``
-    2. ``/tmp/llm-monitor-<uid>/``
+    1. ``$XDG_RUNTIME_DIR/clawmeter/``
+    2. ``/tmp/clawmeter-<uid>/``
     """
     xdg_runtime = os.environ.get("XDG_RUNTIME_DIR")
     if xdg_runtime:
-        return Path(xdg_runtime) / "llm-monitor"
+        return Path(xdg_runtime) / "clawmeter"
 
-    return Path(f"/tmp/llm-monitor-{os.getuid()}")
+    return Path(f"/tmp/clawmeter-{os.getuid()}")
 
 
 def get_log_dir() -> Path:
     """Resolve the daemon log directory.
 
     Resolution order:
-    1. ``$XDG_STATE_HOME/llm-monitor/``
-    2. ``~/.local/state/llm-monitor/``
+    1. ``$XDG_STATE_HOME/clawmeter/``
+    2. ``~/.local/state/clawmeter/``
     """
     xdg_state = os.environ.get("XDG_STATE_HOME")
     if xdg_state:
-        return Path(xdg_state) / "llm-monitor"
+        return Path(xdg_state) / "clawmeter"
 
-    return Path.home() / ".local" / "state" / "llm-monitor"
+    return Path.home() / ".local" / "state" / "clawmeter"
 
 
 def get_pid_file(config: dict) -> Path:
@@ -156,8 +156,8 @@ def get_cache_dir() -> Path:
 
     Resolution order:
     1. ``$LLM_MONITOR_CACHE_DIR``
-    2. ``$XDG_CACHE_HOME/llm-monitor/``
-    3. ``~/.cache/llm-monitor/``
+    2. ``$XDG_CACHE_HOME/clawmeter/``
+    3. ``~/.cache/clawmeter/``
     """
     env_path = os.environ.get("LLM_MONITOR_CACHE_DIR")
     if env_path:
@@ -165,9 +165,9 @@ def get_cache_dir() -> Path:
 
     xdg_cache = os.environ.get("XDG_CACHE_HOME")
     if xdg_cache:
-        return Path(xdg_cache) / "llm-monitor"
+        return Path(xdg_cache) / "clawmeter"
 
-    return Path.home() / ".cache" / "llm-monitor"
+    return Path.home() / ".cache" / "clawmeter"
 
 
 def is_alpha_enabled(config: dict) -> bool:

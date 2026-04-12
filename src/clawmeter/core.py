@@ -12,11 +12,11 @@ from typing import TYPE_CHECKING
 
 import httpx
 
-from llm_monitor.cache import ProviderCache
-from llm_monitor.models import ProviderStatus
+from clawmeter.cache import ProviderCache
+from clawmeter.models import ProviderStatus
 
 if TYPE_CHECKING:
-    from llm_monitor.providers.base import Provider
+    from clawmeter.providers.base import Provider
 
 # Backoff constants (Section 3.1)
 _BACKOFF_BASE_MINUTES = 10

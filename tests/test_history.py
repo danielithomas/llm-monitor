@@ -15,9 +15,9 @@ import pytest
 import respx
 from click.testing import CliRunner
 
-from llm_monitor.cli import cli
-from llm_monitor.history import HistoryStore, SCHEMA_VERSION
-from llm_monitor.models import ModelUsage, ProviderStatus, UsageWindow
+from clawmeter.cli import cli
+from clawmeter.history import HistoryStore, SCHEMA_VERSION
+from clawmeter.models import ModelUsage, ProviderStatus, UsageWindow
 
 
 # ---------------------------------------------------------------------------
@@ -502,7 +502,7 @@ class TestPurge:
         with HistoryStore(db_path) as store:
             store.record(_make_status())
 
-        monkeypatch.setattr("llm_monitor.cli._stdin_is_tty", lambda: True)
+        monkeypatch.setattr("clawmeter.cli._stdin_is_tty", lambda: True)
         monkeypatch.setattr("builtins.input", lambda prompt="": "yes")
 
         runner = CliRunner()
@@ -518,7 +518,7 @@ class TestPurge:
         with HistoryStore(db_path) as store:
             store.record(_make_status())
 
-        monkeypatch.setattr("llm_monitor.cli._stdin_is_tty", lambda: True)
+        monkeypatch.setattr("clawmeter.cli._stdin_is_tty", lambda: True)
         monkeypatch.setattr("builtins.input", lambda prompt="": "purge")
 
         runner = CliRunner()
@@ -534,7 +534,7 @@ class TestPurge:
         with HistoryStore(db_path) as store:
             store.record(_make_status())
 
-        monkeypatch.setattr("llm_monitor.cli._stdin_is_tty", lambda: False)
+        monkeypatch.setattr("clawmeter.cli._stdin_is_tty", lambda: False)
 
         runner = CliRunner()
         result = runner.invoke(cli, ["history", "purge"])

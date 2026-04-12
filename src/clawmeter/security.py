@@ -1,4 +1,4 @@
-"""Security utilities for llm-monitor.
+"""Security utilities for clawmeter.
 
 Credential sanitisation, secure file I/O, and process security helpers.
 See spec Sections 7.3, 7.4, 7.6.
@@ -12,7 +12,7 @@ import shlex
 import subprocess
 from typing import List
 
-from llm_monitor.models import CredentialError, SecretStr
+from clawmeter.models import CredentialError, SecretStr
 
 # ---------------------------------------------------------------------------
 # 7.3 Credential Sanitisation - compiled redaction patterns

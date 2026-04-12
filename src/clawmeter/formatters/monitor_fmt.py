@@ -1,4 +1,4 @@
-"""Rich Live TUI monitor for llm-monitor.
+"""Rich Live TUI monitor for clawmeter.
 
 Provides a persistent auto-refreshing terminal dashboard using Rich Live.
 See SPEC.md Section 4.2.5 for the full monitor specification.
@@ -23,8 +23,8 @@ from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
 
-from llm_monitor.formatters.json_fmt import format_json, format_resets_in_human
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.formatters.json_fmt import format_json, format_resets_in_human
+from clawmeter.models import ProviderStatus, UsageWindow
 
 # Shared status-to-colour mapping (matches table_fmt.py).
 STATUS_COLOURS: dict[str, str] = {
@@ -487,7 +487,7 @@ class MonitorRunner:
 
     def _fetch_sparkline_data(self) -> dict[str, list[float]]:
         """Load sparkline data from the history database."""
-        from llm_monitor.history import HistoryStore
+        from clawmeter.history import HistoryStore
 
         result: dict[str, list[float]] = {}
         try:
@@ -522,13 +522,13 @@ class MonitorRunner:
 
     def _detect_daemon(self) -> None:
         """Check whether the daemon is running and set state accordingly."""
-        from llm_monitor.daemon import is_daemon_running
+        from clawmeter.daemon import is_daemon_running
 
         running, _ = is_daemon_running(self.config)
         self.daemon_running = running
 
         if running:
-            from llm_monitor.history import HistoryStore
+            from clawmeter.history import HistoryStore
 
             try:
                 store = HistoryStore()
@@ -554,7 +554,7 @@ class MonitorRunner:
         self._detect_daemon()
 
         if self.daemon_running:
-            from llm_monitor.history import HistoryStore
+            from clawmeter.history import HistoryStore
 
             store = HistoryStore()
             store.open()
@@ -592,12 +592,12 @@ class MonitorRunner:
 
     def _dump_json(self) -> None:
         """Dump current state as JSON to a file in CWD (D-048)."""
-        import llm_monitor
+        import clawmeter
 
         now = datetime.now().strftime("%Y%m%d-%H%M%S")
-        filename = f"llm-monitor-{now}.json"
+        filename = f"clawmeter-{now}.json"
         try:
-            content = format_json(self.statuses, version=llm_monitor.__version__)
+            content = format_json(self.statuses, version=clawmeter.__version__)
             with open(filename, "w") as f:
                 f.write(content)
                 f.write("\n")
@@ -625,7 +625,7 @@ class MonitorRunner:
             self._force_refresh = True
 
         def _on_hup(signum: int, frame: Any) -> None:
-            from llm_monitor.config import load_config
+            from clawmeter.config import load_config
 
             try:
                 self.config = load_config()

@@ -97,6 +97,69 @@ wheels = [
 ]
 
 [[package]]
+name = "clawmeter"
+source = { editable = "." }
+dependencies = [
+    { name = "click" },
+    { name = "httpx" },
+    { name = "keyring" },
+    { name = "rich" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "psutil" },
+    { name = "pygobject" },
+    { name = "pynvml" },
+]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "respx" },
+]
+gtk = [
+    { name = "pygobject" },
+]
+local = [
+    { name = "psutil" },
+    { name = "pynvml" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-asyncio" },
+    { name = "respx" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.0" },
+    { name = "httpx", specifier = ">=0.27" },
+    { name = "keyring", specifier = ">=25.0" },
+    { name = "psutil", marker = "extra == 'all'", specifier = ">=5.9" },
+    { name = "psutil", marker = "extra == 'local'", specifier = ">=5.9" },
+    { name = "pygobject", marker = "extra == 'all'", specifier = ">=3.42" },
+    { name = "pygobject", marker = "extra == 'gtk'", specifier = ">=3.42" },
+    { name = "pynvml", marker = "extra == 'all'", specifier = ">=11.5" },
+    { name = "pynvml", marker = "extra == 'local'", specifier = ">=11.5" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
+    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
+    { name = "rich", specifier = ">=13.0" },
+    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
+]
+provides-extras = ["all", "dev", "gtk", "local"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pytest-asyncio", specifier = ">=0.23" },
+    { name = "respx", specifier = ">=0.21" },
+]
+
+[[package]]
 name = "click"
 version = "8.3.2"
 source = { registry = "https://pypi.org/simple" }
@@ -306,69 +369,6 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/43/4b/674af6ef2f97d56f0ab5153bf0bfa28ccb6c3ed4d1babf4305449668807b/keyring-25.7.0.tar.gz", hash = "sha256:fe01bd85eb3f8fb3dd0405defdeac9a5b4f6f0439edbb3149577f244a2e8245b", size = 63516, upload-time = "2025-11-16T16:26:09.482Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/81/db/e655086b7f3a705df045bf0933bdd9c2f79bb3c97bfef1384598bb79a217/keyring-25.7.0-py3-none-any.whl", hash = "sha256:be4a0b195f149690c166e850609a477c532ddbfbaed96a404d4e43f8d5e2689f", size = 39160, upload-time = "2025-11-16T16:26:08.402Z" },
-]
-
-[[package]]
-name = "llm-monitor"
-source = { editable = "." }
-dependencies = [
-    { name = "click" },
-    { name = "httpx" },
-    { name = "keyring" },
-    { name = "rich" },
-    { name = "tomli", marker = "python_full_version < '3.11'" },
-]
-
-[package.optional-dependencies]
-all = [
-    { name = "psutil" },
-    { name = "pygobject" },
-    { name = "pynvml" },
-]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "respx" },
-]
-gtk = [
-    { name = "pygobject" },
-]
-local = [
-    { name = "psutil" },
-    { name = "pynvml" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-asyncio" },
-    { name = "respx" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.0" },
-    { name = "httpx", specifier = ">=0.27" },
-    { name = "keyring", specifier = ">=25.0" },
-    { name = "psutil", marker = "extra == 'all'", specifier = ">=5.9" },
-    { name = "psutil", marker = "extra == 'local'", specifier = ">=5.9" },
-    { name = "pygobject", marker = "extra == 'all'", specifier = ">=3.42" },
-    { name = "pygobject", marker = "extra == 'gtk'", specifier = ">=3.42" },
-    { name = "pynvml", marker = "extra == 'all'", specifier = ">=11.5" },
-    { name = "pynvml", marker = "extra == 'local'", specifier = ">=11.5" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-asyncio", marker = "extra == 'dev'", specifier = ">=0.23" },
-    { name = "respx", marker = "extra == 'dev'", specifier = ">=0.21" },
-    { name = "rich", specifier = ">=13.0" },
-    { name = "tomli", marker = "python_full_version < '3.11'", specifier = ">=2.0" },
-]
-provides-extras = ["all", "dev", "gtk", "local"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=8.0" },
-    { name = "pytest-asyncio", specifier = ">=0.23" },
-    { name = "respx", specifier = ">=0.21" },
 ]
 
 [[package]]

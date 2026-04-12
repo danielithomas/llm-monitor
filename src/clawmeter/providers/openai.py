@@ -16,7 +16,7 @@ from typing import Optional
 
 import httpx
 
-from llm_monitor.models import (
+from clawmeter.models import (
     CredentialError,
     ModelUsage,
     ProviderStatus,
@@ -24,9 +24,9 @@ from llm_monitor.models import (
     UsageWindow,
     compute_status,
 )
-from llm_monitor.providers import register_provider
-from llm_monitor.providers.base import Provider
-from llm_monitor.security import is_container_mode, run_key_command
+from clawmeter.providers import register_provider
+from clawmeter.providers.base import Provider
+from clawmeter.security import is_container_mode, run_key_command
 
 API_BASE = "https://api.openai.com/v1"
 
@@ -75,7 +75,7 @@ class OpenAIProvider(Provider):
             try:
                 import keyring as kr
 
-                secret = kr.get_password("llm-monitor/openai", "admin_key")
+                secret = kr.get_password("clawmeter/openai", "admin_key")
                 if secret:
                     return SecretStr(secret)
             except Exception:
