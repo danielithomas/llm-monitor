@@ -1,4 +1,4 @@
-"""Rich table formatter for llm-monitor."""
+"""Rich table formatter for clawmeter."""
 
 from __future__ import annotations
 
@@ -8,8 +8,8 @@ from rich.console import Console
 from rich.table import Table
 from rich.text import Text
 
-from llm_monitor.formatters.json_fmt import format_resets_in_human
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.formatters.json_fmt import format_resets_in_human
+from clawmeter.models import ProviderStatus, UsageWindow
 
 # Mapping from status string to Rich colour name.
 _STATUS_COLOURS: dict[str, str] = {

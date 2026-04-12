@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to llm-monitor are documented in this file.
+All notable changes to clawmeter are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -91,7 +91,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
-- **Background daemon** (`llm-monitor daemon start/stop/status/install`) — polls providers on a schedule and writes to the shared SQLite history database
+- **Background daemon** (`clawmeter daemon start/stop/status/install`) — polls providers on a schedule and writes to the shared SQLite history database
 - PID file management with stale PID detection
 - `daemon install` generates a systemd user unit for automatic startup
 - CLI reads from daemon's database when available, falls back to direct fetching
@@ -105,9 +105,9 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added
 
 - **SQLite history store** (`history.py`) — records provider snapshots with WAL mode and retention pruning
-- `llm-monitor history` — query historical usage data with time range filters
-- `llm-monitor report` — generate usage summaries (daily/weekly/monthly) with trend analysis
-- `llm-monitor export` — export history to CSV or JSON
+- `clawmeter history` — query historical usage data with time range filters
+- `clawmeter report` — generate usage summaries (daily/weekly/monthly) with trend analysis
+- `clawmeter export` — export history to CSV or JSON
 - Meaningful-change detection to avoid storing duplicate snapshots
 - Per-model usage tracking in dedicated `model_usage` table
 
@@ -124,7 +124,7 @@ Versioning follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - 4-tier credential resolution: `key_command` > env var > keyring > provider-specific file
 - `SecretStr` wrapper with safe `__repr__` — secrets never leak in logs or output
 - **JSON cache** with `poll_interval`-based TTL and `fcntl.flock()` file locking
-- **TOML configuration** from `~/.config/llm-monitor/config.toml` with env var path overrides
+- **TOML configuration** from `~/.config/clawmeter/config.toml` with env var path overrides
 - **Security module** — credential sanitisation, secure file I/O (`0o600`/`0o700`), atomic writes
 - Allowed-hosts enforcement for credential-bearing HTTP requests
 - `key_command` execution with `shell=False` and 10s timeout

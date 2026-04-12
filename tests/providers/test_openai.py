@@ -9,8 +9,8 @@ import httpx
 import pytest
 import respx
 
-from llm_monitor.models import ProviderStatus
-from llm_monitor.providers.openai import OpenAIProvider, API_BASE
+from clawmeter.models import ProviderStatus
+from clawmeter.providers.openai import OpenAIProvider, API_BASE
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 

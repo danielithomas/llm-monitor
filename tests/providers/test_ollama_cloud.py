@@ -10,8 +10,8 @@ import httpx
 import pytest
 import respx
 
-from llm_monitor.models import ProviderStatus
-from llm_monitor.providers.ollama import OllamaProvider, CLOUD_API_BASE
+from clawmeter.models import ProviderStatus
+from clawmeter.providers.ollama import OllamaProvider, CLOUD_API_BASE
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 HOST_URL = "http://localhost:11434"
@@ -119,7 +119,7 @@ class TestAlphaGating:
     @pytest.mark.asyncio
     async def test_alpha_warning_emitted(self, monkeypatch, capfd):
         """Alpha feature warning is printed to stderr."""
-        import llm_monitor.config as config_mod
+        import clawmeter.config as config_mod
         monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
 
         provider = _make_cloud_provider(monkeypatch)

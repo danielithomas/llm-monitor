@@ -7,8 +7,8 @@ from abc import ABC, abstractmethod
 
 import httpx
 
-from llm_monitor.models import CredentialError, ProviderStatus, SecretStr
-from llm_monitor.security import is_container_mode, run_key_command
+from clawmeter.models import CredentialError, ProviderStatus, SecretStr
+from clawmeter.security import is_container_mode, run_key_command
 
 
 class Provider(ABC):
@@ -56,7 +56,7 @@ class Provider(ABC):
         Resolution order:
         1. key_command (from config) — hard fail on error (raises CredentialError)
         2. Environment variable (from config ``env_var`` or ``_default_env_var()``)
-        3. Keyring lookup (service = ``llm-monitor/<provider_name>``)
+        3. Keyring lookup (service = ``clawmeter/<provider_name>``)
         4. Returns None
 
         If key_command is configured and fails, a CredentialError is raised —
@@ -80,9 +80,13 @@ class Provider(ABC):
         # Tier 3: keyring (skip in container mode — no D-Bus Secret Service)
         if not is_container_mode():
             try:
+                from clawmeter.migrate import migrate_keyring_credential
+
+                migrate_keyring_credential(self.name())
+
                 import keyring as kr
 
-                service = f"llm-monitor/{self.name()}"
+                service = f"clawmeter/{self.name()}"
                 secret = kr.get_password(service, "api_key")
                 if secret:
                     return SecretStr(secret)

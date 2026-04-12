@@ -1,10 +1,10 @@
-"""Provider registry for llm-monitor."""
+"""Provider registry for clawmeter."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from llm_monitor.providers.base import Provider
+from clawmeter.providers.base import Provider
 
 # Module-level registry: provider name -> provider class
 PROVIDERS: dict[str, type[Provider]] = {}
@@ -38,7 +38,7 @@ def get_enabled_providers(config: dict) -> list[type[Provider]]:
 
 
 # Import concrete providers to trigger registration
-from llm_monitor.providers.claude import ClaudeProvider  # noqa: E402, F401
-from llm_monitor.providers.grok import GrokProvider  # noqa: E402, F401
-from llm_monitor.providers.ollama import OllamaProvider  # noqa: E402, F401
-from llm_monitor.providers.openai import OpenAIProvider  # noqa: E402, F401
+from clawmeter.providers.claude import ClaudeProvider  # noqa: E402, F401
+from clawmeter.providers.grok import GrokProvider  # noqa: E402, F401
+from clawmeter.providers.ollama import OllamaProvider  # noqa: E402, F401
+from clawmeter.providers.openai import OpenAIProvider  # noqa: E402, F401

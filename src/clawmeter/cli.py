@@ -1,4 +1,4 @@
-"""Click CLI entry point for llm-monitor.
+"""Click CLI entry point for clawmeter.
 
 All data goes to stdout, all messages go to stderr.
 See SPEC.md Section 4 for the full CLI specification.
@@ -13,21 +13,21 @@ from datetime import datetime, timedelta, timezone
 
 import click
 
-import llm_monitor
-from llm_monitor.cache import ProviderCache
-from llm_monitor.config import get_cache_dir, get_pid_file, get_state_file, load_config
-from llm_monitor.core import determine_exit_code, fetch_all
-from llm_monitor.daemon import (
+import clawmeter
+from clawmeter.cache import ProviderCache
+from clawmeter.config import get_cache_dir, get_pid_file, get_state_file, load_config
+from clawmeter.core import determine_exit_code, fetch_all
+from clawmeter.daemon import (
     DaemonRunner,
     daemonise,
     is_daemon_running,
     read_state,
 )
-from llm_monitor.formatters.json_fmt import format_json
-from llm_monitor.formatters.table_fmt import format_table
-from llm_monitor.history import HistoryStore
-from llm_monitor.providers import PROVIDERS, get_enabled_providers
-from llm_monitor.security import is_container_mode
+from clawmeter.formatters.json_fmt import format_json
+from clawmeter.formatters.table_fmt import format_table
+from clawmeter.history import HistoryStore
+from clawmeter.providers import PROVIDERS, get_enabled_providers
+from clawmeter.security import is_container_mode
 
 
 def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
@@ -36,7 +36,7 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
     Precedence (highest to lowest):
     1. --no-colour flag (always disables)
     2. $NO_COLOR env var (if set to any value, disables)
-    3. $LLM_MONITOR_NO_COLOR env var
+    3. $CLAWMETER_NO_COLOR env var
     4. $TERM=dumb (disables)
     5. TTY detection (auto)
     6. --colour=always (force enable even when piped)
@@ -45,7 +45,7 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
         return False
     if os.environ.get("NO_COLOR") is not None:
         return False
-    if os.environ.get("LLM_MONITOR_NO_COLOR") is not None:
+    if os.environ.get("CLAWMETER_NO_COLOR") is not None:
         return False
     if os.environ.get("TERM") == "dumb":
         return False
@@ -123,7 +123,7 @@ class _MainGroup(click.Group):
 def cli(ctx: click.Context, version: bool) -> None:
     """Monitor LLM service usage across providers."""
     if version:
-        click.echo(f"llm-monitor {llm_monitor.__version__}")
+        click.echo(f"clawmeter {clawmeter.__version__}")
         ctx.exit(0)
 
 
@@ -249,7 +249,7 @@ def status(
 
         # Build a standalone fetch function for when daemon is not running
         def _standalone_fetch() -> list:
-            from llm_monitor.models import ProviderStatus as _PS
+            from clawmeter.models import ProviderStatus as _PS
 
             if provider:
                 requested = [p.strip() for p in provider.split(",")]
@@ -284,7 +284,7 @@ def status(
 
             return statuses
 
-        from llm_monitor.formatters.monitor_fmt import MonitorRunner
+        from clawmeter.formatters.monitor_fmt import MonitorRunner
 
         runner = MonitorRunner(
             config=config,
@@ -378,7 +378,7 @@ def status(
                     output = format_table(statuses, colour=use_colour)
                 else:
                     output = format_json(
-                        statuses, version=llm_monitor.__version__
+                        statuses, version=clawmeter.__version__
                     )
                 click.echo(output)
 
@@ -447,7 +447,7 @@ def status(
     if now:
         output = format_table(statuses, colour=use_colour)
     else:
-        output = format_json(statuses, version=llm_monitor.__version__)
+        output = format_json(statuses, version=clawmeter.__version__)
 
     click.echo(output)
 
@@ -510,7 +510,7 @@ def history_purge(confirm: bool, config_path: str | None) -> None:
             if not _stdin_is_tty():
                 click.echo(
                     "Error: history purge requires interactive confirmation.\n"
-                    "Fix: Use --confirm to bypass: llm-monitor history purge --confirm",
+                    "Fix: Use --confirm to bypass: clawmeter history purge --confirm",
                     err=True,
                 )
                 sys.exit(1)
@@ -922,7 +922,7 @@ def daemon_stop(config_path: str | None) -> None:
         os.kill(pid, sig.SIGTERM)
     except ProcessLookupError:
         click.echo("Daemon process already exited.", err=True)
-        from llm_monitor.daemon import remove_pid_file
+        from clawmeter.daemon import remove_pid_file
         remove_pid_file(get_pid_file(config))
         return
 
@@ -941,7 +941,7 @@ def daemon_stop(config_path: str | None) -> None:
     except ProcessLookupError:
         pass
 
-    from llm_monitor.daemon import remove_pid_file
+    from clawmeter.daemon import remove_pid_file
     remove_pid_file(get_pid_file(config))
     click.echo("Daemon killed.", err=True)
 
@@ -1048,18 +1048,18 @@ def daemon_install(config_path: str | None) -> None:
 
     _load_config_or_exit(config_path)
 
-    # Resolve the llm-monitor binary path
-    binary = shutil.which("llm-monitor")
+    # Resolve the clawmeter binary path
+    binary = shutil.which("clawmeter")
     if not binary:
-        binary = f"{sys.executable} -m llm_monitor"
+        binary = f"{sys.executable} -m clawmeter"
 
     service_dir = os.path.expanduser("~/.config/systemd/user")
-    service_path = os.path.join(service_dir, "llm-monitor.service")
+    service_path = os.path.join(service_dir, "clawmeter.service")
 
     unit_content = f"""\
 [Unit]
 Description=LLM Usage Monitor Daemon
-Documentation=https://github.com/danielithomas/llm-monitor
+Documentation=https://github.com/danielithomas/clawmeter
 After=network-online.target
 Wants=network-online.target
 
@@ -1068,7 +1068,7 @@ Type=exec
 ExecStart={binary} daemon run
 Restart=on-failure
 RestartSec=30
-Environment=LLM_MONITOR_LOG_LEVEL=info
+Environment=CLAWMETER_LOG_LEVEL=info
 
 [Install]
 WantedBy=default.target
@@ -1087,7 +1087,7 @@ WantedBy=default.target
             check=True, capture_output=True,
         )
         subprocess.run(
-            ["systemctl", "--user", "enable", "--now", "llm-monitor"],
+            ["systemctl", "--user", "enable", "--now", "clawmeter"],
             check=True, capture_output=True,
         )
         click.echo("Service enabled and started.", err=True)
@@ -1095,13 +1095,13 @@ WantedBy=default.target
         click.echo(
             "Warning: systemctl not found. Service file written but not enabled.\n"
             "Fix: Run manually: systemctl --user daemon-reload && "
-            "systemctl --user enable --now llm-monitor",
+            "systemctl --user enable --now clawmeter",
             err=True,
         )
     except subprocess.CalledProcessError as exc:
         click.echo(
             f"Warning: systemctl command failed: {exc.stderr.decode().strip()}\n"
-            "Fix: Check systemd status with: systemctl --user status llm-monitor",
+            "Fix: Check systemd status with: systemctl --user status clawmeter",
             err=True,
         )
 
@@ -1119,13 +1119,13 @@ def daemon_uninstall() -> None:
         sys.exit(1)
 
     service_path = os.path.expanduser(
-        "~/.config/systemd/user/llm-monitor.service"
+        "~/.config/systemd/user/clawmeter.service"
     )
 
     # Disable and stop
     try:
         subprocess.run(
-            ["systemctl", "--user", "disable", "--now", "llm-monitor"],
+            ["systemctl", "--user", "disable", "--now", "clawmeter"],
             check=True, capture_output=True,
         )
     except (FileNotFoundError, subprocess.CalledProcessError):

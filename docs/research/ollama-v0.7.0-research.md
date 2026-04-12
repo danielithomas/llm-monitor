@@ -70,7 +70,7 @@ Usage is measured by **actual GPU infrastructure consumption** (primarily GPU ti
 
 Over 20 cloud models available, including: GLM-5.1, Gemma4 (26b/31b), MiniMax M2.7, Qwen3.5 (up to 122b), Qwen3-VL (up to 235b), DeepSeek V3.2, Nemotron-3 Super (120B MoE), Kimi K2.5, Devstral-2 (123b), Cogito 2.1 (671b), and others. Full list at [ollama.com/search?c=cloud](https://ollama.com/search?c=cloud).
 
-### 1.4 Implication for llm-monitor
+### 1.4 Implication for clawmeter
 
 The Ollama provider needs to be **two monitors in one**:
 1. **Local instance monitor** — poll `/api/ps`, `/api/tags` on local/network hosts for VRAM, loaded models, health
@@ -520,7 +520,7 @@ poll_interval = 60                   # local service, can poll frequently
 # Requires an Ollama account and API key (ollama.com/settings/keys)
 # cloud_enabled = true
 # api_key_env = "OLLAMA_API_KEY"     # default env var
-# api_key_command = "pass show llm-monitor/ollama-cloud"
+# api_key_command = "pass show clawmeter/ollama-cloud"
 # cloud_poll_interval = 300          # cloud quota, 5 min is fine
 ```
 

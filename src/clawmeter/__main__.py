@@ -1,4 +1,4 @@
-"""Entry point for ``python -m llm_monitor`` and the ``llm-monitor`` script.
+"""Entry point for ``python -m clawmeter`` and the ``clawmeter`` script.
 
 Handles SIGPIPE, BrokenPipeError, and KeyboardInterrupt gracefully.
 """
@@ -15,7 +15,12 @@ def main() -> None:
     except (AttributeError, OSError):
         pass  # Windows doesn't have SIGPIPE
 
-    from llm_monitor.cli import cli
+    from clawmeter.migrate import migrate_xdg_directories, warn_old_env_vars
+
+    warn_old_env_vars()
+    migrate_xdg_directories()
+
+    from clawmeter.cli import cli
 
     try:
         cli(standalone_mode=False)

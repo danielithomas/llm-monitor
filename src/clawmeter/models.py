@@ -1,4 +1,4 @@
-"""Core data models for llm-monitor."""
+"""Core data models for clawmeter."""
 
 from __future__ import annotations
 

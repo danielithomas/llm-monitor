@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from llm_monitor.config import (
+from clawmeter.config import (
     DEFAULT_CONFIG,
     get_cache_dir,
     get_config_path,
@@ -32,10 +32,10 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def _clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove all env vars that influence config path resolution."""
     for var in (
-        "LLM_MONITOR_CONFIG",
-        "LLM_MONITOR_DATA_DIR",
-        "LLM_MONITOR_CACHE_DIR",
-        "LLM_MONITOR_CONTAINER",
+        "CLAWMETER_CONFIG",
+        "CLAWMETER_DATA_DIR",
+        "CLAWMETER_CACHE_DIR",
+        "CLAWMETER_CONTAINER",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",
         "XDG_CACHE_HOME",
@@ -84,22 +84,22 @@ class TestDefaultConfig:
 class TestGetConfigPath:
     def test_env_var_overrides(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", "/custom/path/config.toml")
+        monkeypatch.setenv("CLAWMETER_CONFIG", "/custom/path/config.toml")
         assert get_config_path() == Path("/custom/path/config.toml")
 
     def test_xdg_config_home(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_CONFIG_HOME", "/xdg/config")
-        assert get_config_path() == Path("/xdg/config/llm-monitor/config.toml")
+        assert get_config_path() == Path("/xdg/config/clawmeter/config.toml")
 
     def test_default_fallback(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        expected = Path.home() / ".config" / "llm-monitor" / "config.toml"
+        expected = Path.home() / ".config" / "clawmeter" / "config.toml"
         assert get_config_path() == expected
 
     def test_env_var_takes_precedence_over_xdg(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", "/explicit/config.toml")
+        monkeypatch.setenv("CLAWMETER_CONFIG", "/explicit/config.toml")
         monkeypatch.setenv("XDG_CONFIG_HOME", "/xdg/config")
         assert get_config_path() == Path("/explicit/config.toml")
 
@@ -111,17 +111,17 @@ class TestGetConfigPath:
 class TestGetDataDir:
     def test_env_var_overrides(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", "/custom/data")
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", "/custom/data")
         assert get_data_dir() == Path("/custom/data")
 
     def test_xdg_data_home(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_DATA_HOME", "/xdg/data")
-        assert get_data_dir() == Path("/xdg/data/llm-monitor")
+        assert get_data_dir() == Path("/xdg/data/clawmeter")
 
     def test_default_fallback(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        expected = Path.home() / ".local" / "share" / "llm-monitor"
+        expected = Path.home() / ".local" / "share" / "clawmeter"
         assert get_data_dir() == expected
 
 
@@ -132,17 +132,17 @@ class TestGetDataDir:
 class TestGetCacheDir:
     def test_env_var_overrides(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", "/custom/cache")
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", "/custom/cache")
         assert get_cache_dir() == Path("/custom/cache")
 
     def test_xdg_cache_home(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_CACHE_HOME", "/xdg/cache")
-        assert get_cache_dir() == Path("/xdg/cache/llm-monitor")
+        assert get_cache_dir() == Path("/xdg/cache/clawmeter")
 
     def test_default_fallback(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        expected = Path.home() / ".cache" / "llm-monitor"
+        expected = Path.home() / ".cache" / "clawmeter"
         assert get_cache_dir() == expected
 
 
@@ -213,11 +213,11 @@ class TestLoadConfigMissing:
 # ---------------------------------------------------------------------------
 
 class TestLoadConfigEnvVar:
-    def test_llm_monitor_config_env_var(self, tmp_path, monkeypatch):
+    def test_clawmeter_config_env_var(self, tmp_path, monkeypatch):
         _clean_config_env(monkeypatch)
         config_file = tmp_path / "env_config.toml"
         config_file.write_text('[general]\npoll_interval = 120\n')
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_file))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_file))
         config = load_config()
         assert config["general"]["poll_interval"] == 120
 
@@ -227,7 +227,7 @@ class TestLoadConfigEnvVar:
         env_config.write_text('[general]\npoll_interval = 111\n')
         explicit_config = tmp_path / "explicit.toml"
         explicit_config.write_text('[general]\npoll_interval = 222\n')
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(env_config))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(env_config))
         config = load_config(str(explicit_config))
         assert config["general"]["poll_interval"] == 222
 
@@ -260,7 +260,7 @@ class TestLoadConfigPermissions:
     def test_loose_permissions_emit_warning(self, tmp_path, monkeypatch, capfd):
         """A config file with 0o644 should produce a warning on stderr."""
         _clean_config_env(monkeypatch)
-        monkeypatch.delenv("LLM_MONITOR_CONTAINER", raising=False)
+        monkeypatch.delenv("CLAWMETER_CONTAINER", raising=False)
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 600\n')
         config_file.chmod(0o644)
@@ -272,7 +272,7 @@ class TestLoadConfigPermissions:
     def test_secure_permissions_no_warning(self, tmp_path, monkeypatch, capfd):
         """A config file with 0o600 should not produce any warning."""
         _clean_config_env(monkeypatch)
-        monkeypatch.delenv("LLM_MONITOR_CONTAINER", raising=False)
+        monkeypatch.delenv("CLAWMETER_CONTAINER", raising=False)
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 600\n')
         config_file.chmod(0o600)
@@ -289,9 +289,9 @@ class TestLoadConfigContainerMode:
     def test_container_mode_skips_permission_warning(
         self, tmp_path, monkeypatch, capfd
     ):
-        """When $LLM_MONITOR_CONTAINER=1, no permission warning is emitted."""
+        """When $CLAWMETER_CONTAINER=1, no permission warning is emitted."""
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 600\n')
         config_file.chmod(0o644)
@@ -301,7 +301,7 @@ class TestLoadConfigContainerMode:
 
     def test_container_mode_still_loads_config(self, tmp_path, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 42\n')
         config = load_config(str(config_file))
@@ -310,10 +310,10 @@ class TestLoadConfigContainerMode:
     def test_container_mode_skips_keyring(self, monkeypatch):
         """Container mode skips keyring tier in credential resolution."""
         from unittest.mock import patch
-        from llm_monitor.providers.base import Provider
+        from clawmeter.providers.base import Provider
 
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
 
         # Use a concrete test provider
         class _TestProvider(Provider):
@@ -335,7 +335,7 @@ class TestLoadConfigContainerMode:
         keyring_called = False
         original_import = __builtins__.__import__ if hasattr(__builtins__, '__import__') else __import__
 
-        with patch("llm_monitor.security.is_container_mode", return_value=True):
+        with patch("clawmeter.security.is_container_mode", return_value=True):
             result = p.resolve_credential(config)
 
         # Should return None without attempting keyring
@@ -356,26 +356,26 @@ class TestDaemonConfig:
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
         result = get_pid_dir()
-        assert result == Path("/run/user/1000/llm-monitor")
+        assert result == Path("/run/user/1000/clawmeter")
 
     def test_get_pid_dir_fallback(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.delenv("XDG_RUNTIME_DIR", raising=False)
         result = get_pid_dir()
-        assert str(result).startswith("/tmp/llm-monitor-")
+        assert str(result).startswith("/tmp/clawmeter-")
         assert str(os.getuid()) in str(result)
 
     def test_get_log_dir_xdg_state(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_STATE_HOME", "/home/test/.local/state")
         result = get_log_dir()
-        assert result == Path("/home/test/.local/state/llm-monitor")
+        assert result == Path("/home/test/.local/state/clawmeter")
 
     def test_get_log_dir_fallback(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.delenv("XDG_STATE_HOME", raising=False)
         result = get_log_dir()
-        assert result == Path.home() / ".local" / "state" / "llm-monitor"
+        assert result == Path.home() / ".local" / "state" / "clawmeter"
 
     def test_get_pid_file_custom(self, monkeypatch):
         _clean_config_env(monkeypatch)
@@ -386,7 +386,7 @@ class TestDaemonConfig:
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
         config = {"daemon": {"pid_file": ""}}
-        assert get_pid_file(config) == Path("/run/user/1000/llm-monitor/daemon.pid")
+        assert get_pid_file(config) == Path("/run/user/1000/clawmeter/daemon.pid")
 
     def test_get_log_file_custom(self, monkeypatch):
         _clean_config_env(monkeypatch)
@@ -397,13 +397,13 @@ class TestDaemonConfig:
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_STATE_HOME", "/home/test/.local/state")
         config = {"daemon": {"log_file": ""}}
-        assert get_log_file(config) == Path("/home/test/.local/state/llm-monitor/daemon.log")
+        assert get_log_file(config) == Path("/home/test/.local/state/clawmeter/daemon.log")
 
     def test_get_state_file(self, monkeypatch):
         _clean_config_env(monkeypatch)
         monkeypatch.setenv("XDG_RUNTIME_DIR", "/run/user/1000")
         config = {"daemon": {}}
-        assert get_state_file(config) == Path("/run/user/1000/llm-monitor/daemon.state")
+        assert get_state_file(config) == Path("/run/user/1000/clawmeter/daemon.state")
 
 
 # ---------------------------------------------------------------------------

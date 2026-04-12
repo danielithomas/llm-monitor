@@ -1,4 +1,4 @@
-"""Security utilities for llm-monitor.
+"""Security utilities for clawmeter.
 
 Credential sanitisation, secure file I/O, and process security helpers.
 See spec Sections 7.3, 7.4, 7.6.
@@ -12,7 +12,7 @@ import shlex
 import subprocess
 from typing import List
 
-from llm_monitor.models import CredentialError, SecretStr
+from clawmeter.models import CredentialError, SecretStr
 
 # ---------------------------------------------------------------------------
 # 7.3 Credential Sanitisation - compiled redaction patterns
@@ -97,10 +97,10 @@ def check_file_permissions(path: str) -> List[str]:
 def is_container_mode() -> bool:
     """Return ``True`` when running inside a container.
 
-    Checks the ``$LLM_MONITOR_CONTAINER`` environment variable (value ``1``)
+    Checks the ``$CLAWMETER_CONTAINER`` environment variable (value ``1``)
     and the presence of ``/.dockerenv``.
     """
-    if os.environ.get("LLM_MONITOR_CONTAINER") == "1":
+    if os.environ.get("CLAWMETER_CONTAINER") == "1":
         return True
     return os.path.exists("/.dockerenv")
 

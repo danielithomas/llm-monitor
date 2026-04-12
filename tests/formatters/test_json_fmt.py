@@ -8,8 +8,8 @@ from unittest.mock import patch
 
 import pytest
 
-from llm_monitor.formatters.json_fmt import format_json, format_resets_in_human
-from llm_monitor.models import ProviderStatus, SecretStr, UsageWindow
+from clawmeter.formatters.json_fmt import format_json, format_resets_in_human
+from clawmeter.models import ProviderStatus, SecretStr, UsageWindow
 
 # Fixed "now" used by all resets_in_human tests so results are deterministic.
 _FROZEN_NOW = datetime(2026, 4, 5, 10, 0, 0, tzinfo=timezone.utc)
@@ -24,7 +24,7 @@ def _patch_now():
         def now(cls, tz=None):  # noqa: ANN001
             return _FROZEN_NOW
 
-    return patch("llm_monitor.formatters.json_fmt.datetime", FrozenDatetime)
+    return patch("clawmeter.formatters.json_fmt.datetime", FrozenDatetime)
 
 
 # ---------------------------------------------------------------------------

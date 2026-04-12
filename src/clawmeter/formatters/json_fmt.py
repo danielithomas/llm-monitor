@@ -1,11 +1,11 @@
-"""JSON output formatter for llm-monitor."""
+"""JSON output formatter for clawmeter."""
 
 from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
 
-from llm_monitor.models import ProviderStatus
+from clawmeter.models import ProviderStatus
 
 
 def format_resets_in_human(resets_at: datetime | None) -> str | None:
@@ -43,7 +43,7 @@ def format_resets_in_human(resets_at: datetime | None) -> str | None:
 
 def _serialize_window(window: object) -> dict:
     """Serialize a UsageWindow to a JSON-safe dict."""
-    from llm_monitor.models import UsageWindow
+    from clawmeter.models import UsageWindow
 
     assert isinstance(window, UsageWindow)
     return {
@@ -61,7 +61,7 @@ def _serialize_window(window: object) -> dict:
 def _serialize_status(status: ProviderStatus) -> dict:
     """Serialize a ProviderStatus to a JSON-safe dict, stripping secrets."""
     # Build extras, converting any SecretStr values to redacted strings
-    from llm_monitor.models import SecretStr
+    from clawmeter.models import SecretStr
 
     safe_extras: dict = {}
     for key, value in status.extras.items():

@@ -6,8 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from llm_monitor.formatters.table_fmt import format_table
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.formatters.table_fmt import format_table
+from clawmeter.models import ProviderStatus, UsageWindow
 
 
 def _make_status(
@@ -112,7 +112,7 @@ class TestFormatTableContent:
         output = format_table([], colour=False)
         assert "LLM Monitor" in output
 
-    def test_header_contains_llm_monitor(self) -> None:
+    def test_header_contains_clawmeter(self) -> None:
         status = _make_status()
         output = format_table([status], colour=False)
         assert "LLM Monitor" in output

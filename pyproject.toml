@@ -3,7 +3,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "llm-monitor"
+name = "clawmeter"
 dynamic = ["version"]
 description = "Monitor LLM service usage across providers from the CLI"
 readme = "README.md"
@@ -38,7 +38,7 @@ gtk = [
     "PyGObject>=3.42",
 ]
 all = [
-    "llm-monitor[local,gtk]",
+    "clawmeter[local,gtk]",
 ]
 dev = [
     "pytest>=8.0",
@@ -54,16 +54,16 @@ dev = [
 ]
 
 [project.scripts]
-llm-monitor = "llm_monitor.__main__:main"
+clawmeter = "clawmeter.__main__:main"
 
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/llm_monitor/_version.py"
+version-file = "src/clawmeter/_version.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/llm_monitor"]
+packages = ["src/clawmeter"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

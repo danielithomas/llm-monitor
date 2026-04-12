@@ -10,8 +10,8 @@ import httpx
 import pytest
 import respx
 
-from llm_monitor.models import ProviderStatus
-from llm_monitor.providers.claude import ClaudeProvider
+from clawmeter.models import ProviderStatus
+from clawmeter.providers.claude import ClaudeProvider
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 
@@ -354,7 +354,7 @@ class TestExtraUsage:
     @pytest.mark.asyncio
     async def test_extra_usage_with_alpha(self, tmp_path, monkeypatch):
         """Extra Usage window appears when alpha enabled and extra_usage present."""
-        import llm_monitor.config as config_mod
+        import clawmeter.config as config_mod
         monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
 
         provider = _make_provider(tmp_path, alpha=True)
@@ -438,7 +438,7 @@ class TestExtraUsage:
     @pytest.mark.asyncio
     async def test_extra_usage_exceeds_limit(self, tmp_path, monkeypatch):
         """used_credits can exceed monthly_limit."""
-        import llm_monitor.config as config_mod
+        import clawmeter.config as config_mod
         monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
 
         provider = _make_provider(tmp_path, alpha=True)
@@ -466,7 +466,7 @@ class TestExtraUsage:
     @pytest.mark.asyncio
     async def test_alpha_warning_emitted(self, tmp_path, monkeypatch, capfd):
         """Alpha warning is emitted to stderr when extra usage parsed."""
-        import llm_monitor.config as config_mod
+        import clawmeter.config as config_mod
         monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
 
         provider = _make_provider(tmp_path, alpha=True)
@@ -492,7 +492,7 @@ class TestExtras:
     @pytest.mark.asyncio
     async def test_extras_with_extra_usage_alpha(self, tmp_path, monkeypatch):
         """Extras dict includes spend/limit when alpha enabled."""
-        import llm_monitor.config as config_mod
+        import clawmeter.config as config_mod
         monkeypatch.setattr(config_mod, "_alpha_warning_emitted", False)
 
         provider = _make_provider(tmp_path, alpha=True)

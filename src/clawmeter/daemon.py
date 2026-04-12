@@ -1,4 +1,4 @@
-"""Daemon mode for llm-monitor.
+"""Daemon mode for clawmeter.
 
 Background service that polls providers on a schedule and writes to the
 history database.  See SPEC.md Sections 4.2.7 and 4.2.7.1 for the full
@@ -18,8 +18,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from llm_monitor.cache import ProviderCache
-from llm_monitor.config import (
+from clawmeter.cache import ProviderCache
+from clawmeter.config import (
     get_cache_dir,
     get_log_dir,
     get_log_file,
@@ -28,12 +28,12 @@ from llm_monitor.config import (
     get_state_file,
     load_config,
 )
-from llm_monitor.core import fetch_all
-from llm_monitor.history import HistoryStore
-from llm_monitor.providers import PROVIDERS, get_enabled_providers
-from llm_monitor.security import secure_mkdir, secure_write
+from clawmeter.core import fetch_all
+from clawmeter.history import HistoryStore
+from clawmeter.providers import PROVIDERS, get_enabled_providers
+from clawmeter.security import secure_mkdir, secure_write
 
-logger = logging.getLogger("llm_monitor.daemon")
+logger = logging.getLogger("clawmeter.daemon")
 
 
 # ======================================================================
@@ -159,11 +159,11 @@ class DaemonRunner:
 
     def _setup_logging(self) -> None:
         """Configure logging for foreground or background mode."""
-        log_level_str = os.environ.get("LLM_MONITOR_LOG_LEVEL", "info").upper()
+        log_level_str = os.environ.get("CLAWMETER_LOG_LEVEL", "info").upper()
         log_level = getattr(logging, log_level_str, logging.INFO)
         fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
 
-        root = logging.getLogger("llm_monitor")
+        root = logging.getLogger("clawmeter")
         root.setLevel(log_level)
         # Remove any existing handlers
         root.handlers.clear()

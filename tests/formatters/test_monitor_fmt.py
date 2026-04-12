@@ -9,7 +9,7 @@ import pytest
 from rich.console import Console
 from rich.text import Text
 
-from llm_monitor.formatters.monitor_fmt import (
+from clawmeter.formatters.monitor_fmt import (
     MonitorRunner,
     _build_help_panel,
     _build_provider_panel,
@@ -18,7 +18,7 @@ from llm_monitor.formatters.monitor_fmt import (
     format_compact_line,
     render_sparkline,
 )
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.models import ProviderStatus, UsageWindow
 
 
 # ---------------------------------------------------------------------------

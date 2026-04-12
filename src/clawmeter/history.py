@@ -1,4 +1,4 @@
-"""SQLite history store for llm-monitor.
+"""SQLite history store for clawmeter.
 
 Stores usage samples over time for trend analysis and reporting.
 See SPEC.md Section 6 for the full history specification.
@@ -15,9 +15,9 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Optional
 
-from llm_monitor.config import get_data_dir
-from llm_monitor.models import ModelUsage, ProviderStatus, UsageWindow
-from llm_monitor.security import secure_mkdir
+from clawmeter.config import get_data_dir
+from clawmeter.models import ModelUsage, ProviderStatus, UsageWindow
+from clawmeter.security import secure_mkdir
 
 SCHEMA_VERSION = 1
 
@@ -651,7 +651,7 @@ class HistoryStore:
     def export_sql(self) -> str:
         """Export all history data as SQL INSERT statements."""
         lines: list[str] = []
-        lines.append("-- llm-monitor history export (SQL)")
+        lines.append("-- clawmeter history export (SQL)")
         lines.append(f"-- Exported: {datetime.now(timezone.utc).isoformat()}")
         lines.append("")
         lines.append(_SCHEMA_SQL)

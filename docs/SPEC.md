@@ -1,6 +1,6 @@
 # LLM Monitor - Specification
 
-**Project codename:** `llm-monitor`
+**Project codename:** `clawmeter`
 **Version:** 0.1.0 (CLI MVP - Claude provider)
 **Author:** Daniel Thomas
 **Date:** 2026-04-05
@@ -46,7 +46,7 @@ The tool operates in two modes: **standalone** (CLI fetches directly) and **daem
        │                 │                 │                 │
        ▼                 ▼                 ▼                 ▼
 ┌─────────────────────────────────────────────────────────────────────┐
-│                   llm-monitor daemon                                │
+│                   clawmeter daemon                                │
 │  ┌───────────────────────────────────────────────────────────────┐  │
 │  │                    Provider Registry                          │  │
 │  │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────────────┐│  │
@@ -70,7 +70,7 @@ The tool operates in two modes: **standalone** (CLI fetches directly) and **daem
          ▼                  ▼                  ▼
 ┌─────────────────┐ ┌──────────────┐ ┌──────────────┐
 │ CLI (JSON/Table)│ │ TUI Monitor  │ │ GTK UI (v2)  │
-│ llm-monitor     │ │ --monitor    │ │ --ux         │
+│ clawmeter     │ │ --monitor    │ │ --ux         │
 └─────────────────┘ └──────────────┘ └──────────────┘
 ```
 
@@ -231,7 +231,7 @@ class Provider(ABC):
         # Tier 3: system keyring
         if config.get("key_keyring", True):
             try:
-                val = kr.get_password("llm-monitor", f"{self.name()}_api_key")
+                val = kr.get_password("clawmeter", f"{self.name()}_api_key")
                 if val:
                     return SecretStr(val)
             except Exception:
@@ -294,7 +294,7 @@ Providers register themselves using the `@register_provider` decorator in their 
 | Provider: Ollama | Query local Ollama API for running model stats | `httpx` |
 | Provider: Local | System GPU/VRAM/CPU metrics for local inference | `psutil`, `pynvml` |
 | Security Layer | SecretStr, credential resolution, sanitisation, secure I/O | `keyring`, stdlib |
-| Cache Layer | Per-provider cached responses (standalone mode only) | JSON files in `~/.cache/llm-monitor/` |
+| Cache Layer | Per-provider cached responses (standalone mode only) | JSON files in `~/.cache/clawmeter/` |
 | Config Loader | TOML configuration with per-provider sections | `tomllib` / `tomli` |
 | Notification Engine | Desktop notifications on status transitions | `notify-send` / `gi.repository.Notify` |
 | CLI Framework | Argument parsing, mode dispatch, signal handling | `click` or `typer` |
@@ -381,7 +381,7 @@ The backoff state is persisted in the provider's cache file so it survives proce
 
 **Token handling:**
 - Access tokens expire roughly every 6 hours.
-- Claude Code manages token refresh automatically; llm-monitor is a read-only consumer (see Section 7.7).
+- Claude Code manages token refresh automatically; clawmeter is a read-only consumer (see Section 7.7).
 - On token expiry, the tool emits a clear error directing the user to run `claude /login`.
 
 **Extra usage spend (alpha — D-053, v0.7.1):** The existing `/api/oauth/usage` endpoint returns an `extra_usage` object when extra usage is enabled on the account:
@@ -759,10 +759,10 @@ See `docs/research/ollama-v0.7.0-research.md` for the full research report, API 
 ### 4.1 Command Structure
 
 ```
-llm-monitor [MODE] [OPTIONS]
-llm-monitor daemon <start|stop|status|run|install>
-llm-monitor history <report|purge|stats|export>
-llm-monitor config <set-key|check>
+clawmeter [MODE] [OPTIONS]
+clawmeter daemon <start|stop|status|run|install>
+clawmeter history <report|purge|stats|export>
+clawmeter config <set-key|check>
 ```
 
 ### 4.2 Modes
@@ -775,7 +775,7 @@ All modes follow these rules without exception:
 |---------|-------------|-----------|
 | JSON output (default mode) | stdout | Machine-parseable data for piping |
 | Table output (`--now`) | stdout | Primary output the user requested |
-| `--help` output | stdout | Conventional; allows `llm-monitor --help \| less` |
+| `--help` output | stdout | Conventional; allows `clawmeter --help \| less` |
 | `--version` output | stdout | Conventional |
 | `--list-providers` output | stdout | Data the user requested |
 | Error messages | stderr | Must not corrupt piped data |
@@ -795,10 +795,10 @@ The tool MUST detect whether stdout is connected to a TTY and adapt behaviour ac
 **Colour override precedence (highest to lowest):**
 1. `--no-colour` flag (always disables).
 2. `$NO_COLOR` environment variable (if set to any value, disables) - per https://no-color.org/.
-3. `$LLM_MONITOR_NO_COLOR` env var (app-specific override).
+3. `$CLAWMETER_NO_COLOR` env var (app-specific override).
 4. `$TERM=dumb` (disables).
 5. TTY detection (auto).
-6. `--colour=always` flag (force enable even when piped, for `llm-monitor --now --colour=always | less -R`).
+6. `--colour=always` flag (force enable even when piped, for `clawmeter --now --colour=always | less -R`).
 
 #### 4.2.3 JSON Mode (default, no flag required)
 
@@ -806,13 +806,13 @@ Returns structured JSON to stdout and exits. Designed for consumption by scripts
 
 ```bash
 # All configured providers
-llm-monitor | jq '.providers[].provider_name'
+clawmeter | jq '.providers[].provider_name'
 
 # Single provider
-llm-monitor --provider claude | jq '.providers[0].windows'
+clawmeter --provider claude | jq '.providers[0].windows'
 
 # Use in a script
-USAGE=$(llm-monitor --provider claude | jq -r '.providers[0].windows[0].utilisation')
+USAGE=$(clawmeter --provider claude | jq -r '.providers[0].windows[0].utilisation')
 if (( $(echo "$USAGE > 80" | bc -l) )); then
     notify-send "Claude session usage high: ${USAGE}%"
 fi
@@ -859,7 +859,7 @@ fi
 }
 ```
 
-**Computed fields in JSON output:** The `resets_in_human` field is NOT part of the `UsageWindow` dataclass — it is computed at JSON serialisation time from `resets_at` relative to the current timestamp. Format: largest two units, e.g., `"2h 15m"`, `"2d 13h"`, `"45m"`, `"< 1m"`. If `resets_at` is `null`, `resets_in_human` is `null`. The top-level `timestamp` is the time the CLI was invoked. The top-level `version` is the package version (from `importlib.metadata.version("llm-monitor")`).
+**Computed fields in JSON output:** The `resets_in_human` field is NOT part of the `UsageWindow` dataclass — it is computed at JSON serialisation time from `resets_at` relative to the current timestamp. Format: largest two units, e.g., `"2h 15m"`, `"2d 13h"`, `"45m"`, `"< 1m"`. If `resets_at` is `null`, `resets_in_human` is `null`. The top-level `timestamp` is the time the CLI was invoked. The top-level `version` is the package version (from `importlib.metadata.version("clawmeter")`).
 
 **Status values:** `normal` (0-69%), `warning` (70-89%), `critical` (90-99%), `exceeded` (100%+). These thresholds are configurable via the `[thresholds]` config section (see Section 4.6). If `[thresholds]` is present, its `warning` and `critical` values override the defaults. The `exceeded` threshold (100%) is not configurable.
 
@@ -880,9 +880,9 @@ fi
 Renders a human-readable table to stdout and exits. Groups output by provider. Falls back to plain ASCII when stdout is not a TTY.
 
 ```bash
-llm-monitor --now
-llm-monitor --now --provider claude
-llm-monitor --now --provider claude,openai
+clawmeter --now
+clawmeter --now --provider claude
+clawmeter --now --provider claude,openai
 ```
 
 **Example output (multi-provider):**
@@ -921,9 +921,9 @@ LLM Monitor                               05 Apr 2026, 10:30 AEST
 Launches a Rich Live TUI that auto-refreshes and remains running until the user presses `q` or `Ctrl+C`. Displays all configured providers in a stacked layout. Requires an interactive terminal (exits with error if stdout is not a TTY).
 
 ```bash
-llm-monitor --monitor
-llm-monitor --monitor --provider claude
-llm-monitor --monitor --compact    # single-line per provider for tmux
+clawmeter --monitor
+clawmeter --monitor --provider claude
+clawmeter --monitor --compact    # single-line per provider for tmux
 ```
 
 **Data source:** When the daemon is running, `--monitor` reads from the history database (no direct API calls). This makes the TUI a lightweight display-only process. When no daemon is running, `--monitor` fetches directly from providers on each refresh cycle (standalone behaviour).
@@ -943,7 +943,7 @@ llm-monitor --monitor --compact    # single-line per provider for tmux
 - `r` - Force refresh all providers (bypass cache).
 - `1-9` - Force refresh specific provider by index.
 - `q` - Quit.
-- `j` - Dump current state as JSON to `./llm-monitor-<YYYYMMDD-HHMMSS>.json` (D-048). Status message in footer for 3s.
+- `j` - Dump current state as JSON to `./clawmeter-<YYYYMMDD-HHMMSS>.json` (D-048). Status message in footer for 3s.
 - `?` - Show help overlay (D-047). Rich Panel with keybinding list, dismissed on any keypress.
 
 #### 4.2.6 GTK/GNOME Mode (`--ux`) [v2]
@@ -968,15 +968,15 @@ The daemon is a background service that polls providers on a schedule and writes
 **Subcommands:**
 
 ```bash
-llm-monitor daemon start           # start as background process
-llm-monitor daemon stop            # stop the running daemon
-llm-monitor daemon status          # show daemon state, PID, last poll time
-llm-monitor daemon run             # run in foreground (for systemd/Docker)
-llm-monitor daemon install         # install systemd user service
-llm-monitor daemon uninstall       # remove systemd user service
+clawmeter daemon start           # start as background process
+clawmeter daemon stop            # stop the running daemon
+clawmeter daemon status          # show daemon state, PID, last poll time
+clawmeter daemon run             # run in foreground (for systemd/Docker)
+clawmeter daemon install         # install systemd user service
+clawmeter daemon uninstall       # remove systemd user service
 ```
 
-**`daemon start`:** Forks to background, writes PID to `$XDG_RUNTIME_DIR/llm-monitor/daemon.pid` (or `/tmp/llm-monitor-$UID/daemon.pid` if `$XDG_RUNTIME_DIR` is unset). Logs to `$XDG_STATE_HOME/llm-monitor/daemon.log` (or `~/.local/state/llm-monitor/daemon.log`). Exits immediately after fork; the parent prints the PID and returns.
+**`daemon start`:** Forks to background, writes PID to `$XDG_RUNTIME_DIR/clawmeter/daemon.pid` (or `/tmp/clawmeter-$UID/daemon.pid` if `$XDG_RUNTIME_DIR` is unset). Logs to `$XDG_STATE_HOME/clawmeter/daemon.log` (or `~/.local/state/clawmeter/daemon.log`). Exits immediately after fork; the parent prints the PID and returns.
 
 **`daemon run`:** Runs in the foreground, logging to stderr. Designed for systemd `ExecStart`, Docker `ENTRYPOINT`, or manual debugging. This is the primary entry point for containerised deployments.
 
@@ -985,36 +985,36 @@ llm-monitor daemon uninstall       # remove systemd user service
 **`daemon status`:** Reports whether the daemon is running, its PID, uptime, last successful poll per provider, next scheduled poll, and database size.
 
 ```
-$ llm-monitor daemon status
+$ clawmeter daemon status
 Daemon: running (PID 48231, uptime 3h 12m)
   claude    last poll 2m ago    next in 8m     ok
   openai    last poll 2m ago    next in 8m     ok
   ollama    last poll 32s ago   next in 28s    ok
-Database: ~/.local/share/llm-monitor/history.db (4.2 MB)
+Database: ~/.local/share/clawmeter/history.db (4.2 MB)
 ```
 
 **`daemon install`:** Writes a systemd user service unit file and enables it:
 
 ```ini
-# ~/.config/systemd/user/llm-monitor.service
+# ~/.config/systemd/user/clawmeter.service
 [Unit]
 Description=LLM Usage Monitor Daemon
-Documentation=man:llm-monitor(1)
+Documentation=man:clawmeter(1)
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=exec
-ExecStart=/path/to/llm-monitor daemon run
+ExecStart=/path/to/clawmeter daemon run
 Restart=on-failure
 RestartSec=30
-Environment=LLM_MONITOR_LOG_LEVEL=info
+Environment=CLAWMETER_LOG_LEVEL=info
 
 [Install]
 WantedBy=default.target
 ```
 
-After writing the unit file, runs `systemctl --user daemon-reload && systemctl --user enable --now llm-monitor`. The `ExecStart` path is resolved from the current `llm-monitor` binary location (via `shutil.which()` or `sys.argv[0]`).
+After writing the unit file, runs `systemctl --user daemon-reload && systemctl --user enable --now clawmeter`. The `ExecStart` path is resolved from the current `clawmeter` binary location (via `shutil.which()` or `sys.argv[0]`).
 
 **Poll loop:**
 - On startup: read config, initialise providers, run retention pruning, perform an immediate first poll.
@@ -1025,9 +1025,9 @@ After writing the unit file, runs `systemctl --user daemon-reload && systemctl -
 - On `SIGHUP`: reload config file, re-initialise providers.
 - On `SIGTERM` / `SIGINT`: flush pending writes, close database, remove PID file, exit cleanly.
 
-**Standalone fallback:** All CLI modes (`llm-monitor`, `--now`, `--monitor`) continue to work without the daemon. When no daemon is running, the CLI fetches directly from providers and writes to the history database itself (the v0.1.0 behaviour). The daemon is additive, not required.
+**Standalone fallback:** All CLI modes (`clawmeter`, `--now`, `--monitor`) continue to work without the daemon. When no daemon is running, the CLI fetches directly from providers and writes to the history database itself (the v0.1.0 behaviour). The daemon is additive, not required.
 
-**Daemon detection:** The CLI checks for a running daemon by testing the PID file (`$XDG_RUNTIME_DIR/llm-monitor/daemon.pid`). If the daemon is running:
+**Daemon detection:** The CLI checks for a running daemon by testing the PID file (`$XDG_RUNTIME_DIR/clawmeter/daemon.pid`). If the daemon is running:
 - Default mode / `--now` / `--monitor`: read latest data from the history database instead of fetching from providers.
 - `--fresh`: fetch directly from providers (bypass daemon), write to DB.
 - The CLI emits a note to stderr if the daemon is running: `Reading from daemon (last poll 2m ago)`.
@@ -1040,11 +1040,11 @@ After writing the unit file, runs `systemctl --user daemon-reload && systemctl -
 
 **Signal handling:** Uses `loop.add_signal_handler()` (the correct asyncio-on-Unix pattern). Handlers only set flags (`_shutdown`, `_reload`) and wake a shared `asyncio.Event` so the sleep is interrupted immediately rather than waiting for the full interval. The poll loop checks flags between iterations.
 
-**State file:** `daemon status` reads per-provider last/next poll times from an ephemeral JSON state file at `$XDG_RUNTIME_DIR/llm-monitor/daemon.state`, written via `secure_write()` after each poll cycle. This avoids adding columns to the history DB schema. Contents: `{"started_at": "...", "providers": {"claude": {"last_poll": "...", "next_poll": "...", "status": "ok"}}}`.
+**State file:** `daemon status` reads per-provider last/next poll times from an ephemeral JSON state file at `$XDG_RUNTIME_DIR/clawmeter/daemon.state`, written via `secure_write()` after each poll cycle. This avoids adding columns to the history DB schema. Contents: `{"started_at": "...", "providers": {"claude": {"last_poll": "...", "next_poll": "...", "status": "ok"}}}`.
 
 **CLI daemon-aware reads:** `HistoryStore` provides a `get_latest_statuses()` method that reconstructs `ProviderStatus` objects from the most recent rows per provider+window (similar query to the existing `_load_last_known()` but returning full data). The CLI calls this instead of `fetch_all()` when a running daemon is detected. A companion `get_last_poll_time()` method provides the "last poll Xm ago" value.
 
-**Logging:** Stdlib `logging` with a named logger `llm_monitor.daemon`. Foreground mode (`daemon run`) logs to stderr via `StreamHandler`. Background mode (`daemon start`) logs to the configured log file via `FileHandler`. Log level from `$LLM_MONITOR_LOG_LEVEL` (default `info`). Format: `%(asctime)s %(levelname)-8s %(message)s`.
+**Logging:** Stdlib `logging` with a named logger `clawmeter.daemon`. Foreground mode (`daemon run`) logs to stderr via `StreamHandler`. Background mode (`daemon start`) logs to the configured log file via `FileHandler`. Log level from `$CLAWMETER_LOG_LEVEL` (default `info`). Format: `%(asctime)s %(levelname)-8s %(message)s`.
 
 **Reused components:**
 - `core.fetch_all()` — the polling function the daemon wraps
@@ -1060,7 +1060,7 @@ After writing the unit file, runs `systemctl --user daemon-reload && systemctl -
 | Flag | Short | Description | Default |
 |------|-------|-------------|---------|
 | `--provider` | `-p` | Comma-separated list of providers to query | All configured |
-| `--config` | `-c` | Path to config file | `~/.config/llm-monitor/config.toml` |
+| `--config` | `-c` | Path to config file | `~/.config/clawmeter/config.toml` |
 | `--fresh` | `-f` | Bypass cache/daemon, force direct API calls | `false` |
 | `--no-colour` | | Disable colour output | Auto-detect (see 4.2.2) |
 | `--colour=always` | | Force colour output even when piped | `false` |
@@ -1115,9 +1115,9 @@ Errors MUST NOT include stack traces unless `--verbose` is set. Unhandled except
 
 ### 4.6 Configuration File
 
-Location: `~/.config/llm-monitor/config.toml`
+Location: `~/.config/clawmeter/config.toml`
 
-Overridable via `$LLM_MONITOR_CONFIG` environment variable.
+Overridable via `$CLAWMETER_CONFIG` environment variable.
 
 The config file MUST NEVER contain API keys or secrets. Credentials are resolved indirectly via `key_command`, `key_env`, or system keyring. See Section 7 (Security Model) for the full credential resolution hierarchy.
 
@@ -1125,10 +1125,10 @@ The config file MUST NEVER contain API keys or secrets. Credentials are resolved
 
 | Variable | Overrides | Default |
 |----------|-----------|---------|
-| `LLM_MONITOR_CONFIG` | Config file path | `$XDG_CONFIG_HOME/llm-monitor/config.toml` |
-| `LLM_MONITOR_DATA_DIR` | History DB directory | `$XDG_DATA_HOME/llm-monitor/` |
-| `LLM_MONITOR_CACHE_DIR` | Cache directory | `$XDG_CACHE_HOME/llm-monitor/` |
-| `LLM_MONITOR_LOG_LEVEL` | Daemon log level | `info` |
+| `CLAWMETER_CONFIG` | Config file path | `$XDG_CONFIG_HOME/clawmeter/config.toml` |
+| `CLAWMETER_DATA_DIR` | History DB directory | `$XDG_DATA_HOME/clawmeter/` |
+| `CLAWMETER_CACHE_DIR` | Cache directory | `$XDG_CACHE_HOME/clawmeter/` |
+| `CLAWMETER_LOG_LEVEL` | Daemon log level | `info` |
 
 These variables take precedence over XDG defaults and config file values. They are particularly useful for Docker deployments (Section 15).
 
@@ -1151,8 +1151,8 @@ sound = false
 
 # ─── Daemon ───────────────────────────────────────────────────
 [daemon]
-log_file = ""                    # empty = default ($XDG_STATE_HOME/llm-monitor/daemon.log)
-pid_file = ""                    # empty = default ($XDG_RUNTIME_DIR/llm-monitor/daemon.pid)
+log_file = ""                    # empty = default ($XDG_STATE_HOME/clawmeter/daemon.log)
+pid_file = ""                    # empty = default ($XDG_RUNTIME_DIR/clawmeter/daemon.pid)
 
 # ─── Provider: Claude ──────────────────────────────────────────
 [providers.claude]
@@ -1168,17 +1168,17 @@ enabled = false
 team_id = ""                     # required: xAI team ID (or set $XAI_TEAM_ID)
 # Management key (primary — billing, usage, spend data)
 management_key_env = "XAI_MANAGEMENT_KEY"
-# management_key_command = "secret-tool lookup application llm-monitor provider grok-management"
+# management_key_command = "secret-tool lookup application clawmeter provider grok-management"
 # API key (optional — rate limit header data from inference API)
 # key_env = "XAI_API_KEY"
-# key_command = "secret-tool lookup application llm-monitor provider grok"
+# key_command = "secret-tool lookup application clawmeter provider grok"
 # key_keyring = true             # use system keyring (default: true)
 
 # ─── Provider: OpenAI ─────────────────────────────────────────
 [providers.openai]
 enabled = false
 admin_key_env = "OPENAI_ADMIN_KEY"       # Admin key (sk-admin-*), NOT project key
-# admin_key_command = "pass show llm-monitor/openai-admin"
+# admin_key_command = "pass show clawmeter/openai-admin"
 # admin_key_keyring = true
 
 # ─── Provider: Ollama ─────────────────────────────────────────
@@ -1197,7 +1197,7 @@ host = "http://localhost:11434"
 # Cloud usage monitoring (requires enable_alpha_features = true)
 # cloud_enabled = false
 # api_key_env = "OLLAMA_API_KEY"   # default env var for cloud API key
-# api_key_command = "pass show llm-monitor/ollama-cloud"
+# api_key_command = "pass show clawmeter/ollama-cloud"
 # cloud_poll_interval = 300        # cloud quota checks, 5 min default
 
 # ─── Provider: Local System ───────────────────────────────────
@@ -1241,9 +1241,9 @@ Caching serves two modes differently:
 
 ### 5.2 Cache Location
 
-`~/.cache/llm-monitor/<provider>/last.json`
+`~/.cache/clawmeter/<provider>/last.json`
 
-Follows XDG Base Directory specification. Respects `$XDG_CACHE_HOME` and `$LLM_MONITOR_CACHE_DIR` (see Section 4.6).
+Follows XDG Base Directory specification. Respects `$XDG_CACHE_HOME` and `$CLAWMETER_CACHE_DIR` (see Section 4.6).
 
 ### 5.3 Cache Behaviour (Standalone Mode)
 
@@ -1273,7 +1273,7 @@ This is **usage pattern data**, not credentials. It reveals work habits (when an
 
 ### 6.2 Storage Location
 
-`~/.local/share/llm-monitor/history.db`
+`~/.local/share/clawmeter/history.db`
 
 Follows XDG Base Directory specification. Respects `$XDG_DATA_HOME` if set. Created with `0o600` permissions using the secure file I/O pattern from Section 7.4. The directory is created with `0o700`.
 
@@ -1378,15 +1378,15 @@ Or via the CLI flag `--no-history` for a single invocation. When disabled, the d
 
 ### 6.7 History CLI Commands
 
-#### `llm-monitor history report` (aliased as `llm-monitor --report`)
+#### `clawmeter history report` (aliased as `clawmeter --report`)
 
 Display a summary report of usage over time.
 
 ```bash
-llm-monitor --report
-llm-monitor --report --days 30 --provider claude
-llm-monitor --report --days 30 --format csv > usage-march.csv
-llm-monitor --report --days 7 --provider claude --format json
+clawmeter --report
+clawmeter --report --days 30 --provider claude
+clawmeter --report --days 30 --format csv > usage-march.csv
+clawmeter --report --days 7 --provider claude --format json
 ```
 
 **Report flags:**
@@ -1424,16 +1424,16 @@ LLM Usage Report                     29 Mar - 05 Apr 2026
  Period: 7 days │ Samples: 4,218 │ DB size: 1.2 MB
 ```
 
-#### `llm-monitor history purge`
+#### `clawmeter history purge`
 
 Permanently delete all history data. Requires explicit confirmation to prevent accidental data loss.
 
 **Interactive mode (default):**
 ```
-$ llm-monitor history purge
+$ clawmeter history purge
 
 WARNING: This will permanently delete all usage history.
-  Database: ~/.local/share/llm-monitor/history.db
+  Database: ~/.local/share/clawmeter/history.db
   Records:  14,832 samples across 3 providers
   Oldest:   2026-01-05
   Size:     4.2 MB
@@ -1452,7 +1452,7 @@ Aborted. History was not modified.
 
 **Non-interactive / scripted mode:**
 ```bash
-llm-monitor history purge --confirm
+clawmeter history purge --confirm
 ```
 
 The `--confirm` flag bypasses the interactive prompt. Without it, the tool requires the interactive typed confirmation above.
@@ -1460,17 +1460,17 @@ The `--confirm` flag bypasses the interactive prompt. Without it, the tool requi
 When `stdin` is not a TTY (piped context) and `--confirm` is not provided, the interactive prompt is skipped and the tool exits with an error:
 ```
 Error: history purge requires interactive confirmation.
-Fix: Use --confirm to bypass: llm-monitor history purge --confirm
+Fix: Use --confirm to bypass: clawmeter history purge --confirm
 ```
 
-#### `llm-monitor history stats`
+#### `clawmeter history stats`
 
 Quick summary of the history database.
 
 ```
-$ llm-monitor history stats
+$ clawmeter history stats
 
-History Database: ~/.local/share/llm-monitor/history.db
+History Database: ~/.local/share/clawmeter/history.db
   Size:       4.2 MB
   Samples:    14,832
   Providers:  claude, openai, ollama
@@ -1479,14 +1479,14 @@ History Database: ~/.local/share/llm-monitor/history.db
   Retention:  90 days (next prune removes 0 records)
 ```
 
-#### `llm-monitor history export`
+#### `clawmeter history export`
 
 Full raw export of the database for backup or migration. Export always includes all data — no `--models` or `--provider` filtering (that's what `--report` is for). Export is a full dump for backup and migration.
 
 ```bash
-llm-monitor history export --format sql > backup.sql
-llm-monitor history export --format jsonl > backup.jsonl
-llm-monitor history export --format csv > backup.csv
+clawmeter history export --format sql > backup.sql
+clawmeter history export --format jsonl > backup.jsonl
+clawmeter history export --format csv > backup.csv
 ```
 
 **Export formats and column structure:**
@@ -1574,12 +1574,12 @@ Use the Python `keyring` library, which interfaces with the D-Bus Secret Service
 
 ```bash
 # User stores a key (one-time setup)
-llm-monitor config set-key --provider openai
+clawmeter config set-key --provider openai
 # Prompts securely for the admin key, stores via keyring
 
 # Or via secret-tool directly
-secret-tool store --label="llm-monitor: OpenAI Admin Key" \
-    application llm-monitor provider openai
+secret-tool store --label="clawmeter: OpenAI Admin Key" \
+    application clawmeter provider openai
 ```
 
 **Tier 2: Command-based credential helper (`key_command`)**
@@ -1588,9 +1588,9 @@ The config file may contain a `key_command` directive that executes a shell comm
 
 ```toml
 [providers.openai]
-admin_key_command = "pass show llm-monitor/openai-admin"
-# or: admin_key_command = "secret-tool lookup application llm-monitor provider openai"
-# or: admin_key_command = "vault kv get -field=admin_key secret/llm-monitor/openai"
+admin_key_command = "pass show clawmeter/openai-admin"
+# or: admin_key_command = "secret-tool lookup application clawmeter provider openai"
+# or: admin_key_command = "vault kv get -field=admin_key secret/clawmeter/openai"
 ```
 
 **Tier 3: Environment variables**
@@ -1606,7 +1606,7 @@ export XAI_TEAM_ID="..."
 
 **Tier 4: Claude Code credential file (Claude provider only)**
 
-Read-only access to `~/.claude/.credentials.json`. This file is owned and managed by Claude Code, not by llm-monitor. The tool reads tokens but never writes to this file (see D-036).
+Read-only access to `~/.claude/.credentials.json`. This file is owned and managed by Claude Code, not by clawmeter. The tool reads tokens but never writes to this file (see D-036).
 
 **Resolution order per provider:**
 1. `key_command` (if configured, execute and read stdout)
@@ -1669,13 +1669,13 @@ def secure_mkdir(path: str) -> None:
 - On startup, check permissions on config file, cache directory, and Claude credentials file.
 - If config file permissions are more permissive than `0o600`, emit a **warning to stderr** on every invocation:
   ```
-  Warning: Config file has loose permissions (0644): ~/.config/llm-monitor/config.toml
+  Warning: Config file has loose permissions (0644): ~/.config/clawmeter/config.toml
   Other users on this system could read your configuration, which may contain credential command paths.
-  Fix: chmod 600 ~/.config/llm-monitor/config.toml
+  Fix: chmod 600 ~/.config/clawmeter/config.toml
   ```
   The tool continues to run. The config file contains no secrets by design (D-016), so this is a defence-in-depth warning rather than a hard failure. The `--quiet` flag suppresses this warning.
 - If Claude credential file permissions are more permissive than `0o600`, emit a **warning to stderr** (do not refuse, as Claude Code manages this file).
-- In containerised environments (detected via `/.dockerenv` or `$LLM_MONITOR_CONTAINER=1`), permission checks are skipped entirely — container volume mounts have their own permission model.
+- In containerised environments (detected via `/.dockerenv` or `$CLAWMETER_CONTAINER=1`), permission checks are skipped entirely — container volume mounts have their own permission model.
 
 **File locking:**
 Use `fcntl.flock()` (advisory locking) when reading/writing cache files to prevent corruption from concurrent access (e.g., two standalone CLI invocations running simultaneously). Lock with `LOCK_SH` for reads, `LOCK_EX` for writes, with a 2-second timeout before falling back to stale data. Note: the tool never writes to credential files (D-036), so credential file locking is not needed.
@@ -1808,14 +1808,14 @@ Each provider handles errors independently. A failure in one provider does not p
 ## 10. Project Structure
 
 ```
-llm-monitor/
+clawmeter/
 ├── pyproject.toml
 ├── README.md
 ├── LICENSE
 ├── CHANGELOG.md
 ├── SPEC.md                          # This document
 ├── src/
-│   └── llm_monitor/
+│   └── clawmeter/
 │       ├── __init__.py
 │       ├── __main__.py              # Entry point, signal handlers
 │       ├── cli.py                   # CLI argument parsing and mode dispatch
@@ -1874,7 +1874,7 @@ llm-monitor/
 ├── docker-compose.yml
 │
 └── assets/
-    ├── llm-monitor.desktop          # XDG autostart (v2)
+    ├── clawmeter.desktop          # XDG autostart (v2)
     └── icons/                       # Tray icons (v2)
 ```
 
@@ -1882,20 +1882,20 @@ llm-monitor/
 
 ```bash
 # Default install - cloud providers (Claude, Grok, OpenAI, Ollama API)
-uv tool install llm-monitor
+uv tool install clawmeter
 
 # With local GPU/system metrics (adds psutil, pynvml)
-uv tool install "llm-monitor[local]"
+uv tool install "clawmeter[local]"
 
 # Everything (local metrics + GTK desktop frontend)
-uv tool install "llm-monitor[all]"
+uv tool install "clawmeter[all]"
 
 # Via pip (if uv is not available)
-pip install llm-monitor --user
+pip install clawmeter --user
 
 # From source (development)
-git clone https://github.com/<user>/llm-monitor.git
-cd llm-monitor
+git clone https://github.com/<user>/clawmeter.git
+cd clawmeter
 uv sync
 ```
 
@@ -1914,7 +1914,7 @@ The default install is lightweight: cloud providers and Ollama API monitoring wi
 
 ### 10.2 PyPI Distribution
 
-The package is published to PyPI as `llm-monitor`. The build backend is `hatchling` with `hatch-vcs` for version derivation from git tags.
+The package is published to PyPI as `clawmeter`. The build backend is `hatchling` with `hatch-vcs` for version derivation from git tags.
 
 ```toml
 # pyproject.toml (key sections)
@@ -1923,7 +1923,7 @@ requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
 
 [project]
-name = "llm-monitor"
+name = "clawmeter"
 dynamic = ["version"]
 description = "Monitor LLM service usage across providers from the CLI"
 readme = "README.md"
@@ -1958,17 +1958,17 @@ gtk = [
     "PyGObject>=3.42",
 ]
 all = [
-    "llm-monitor[local,gtk]",
+    "clawmeter[local,gtk]",
 ]
 
 [project.scripts]
-llm-monitor = "llm_monitor.__main__:main"
+clawmeter = "clawmeter.__main__:main"
 
 [tool.hatch.version]
 source = "vcs"
 
 [tool.hatch.build.hooks.vcs]
-version-file = "src/llm_monitor/_version.py"
+version-file = "src/clawmeter/_version.py"
 ```
 
 ### 10.3 Versioning and Release
@@ -1980,8 +1980,8 @@ The version is derived from git tags using `hatch-vcs` (a `setuptools-scm` equiv
 1. Development builds get automatic versions like `0.1.0.dev12+g1a2b3c4` based on distance from the last tag.
 2. To release, tag a commit: `git tag v0.1.0 && git push --tags`.
 3. CI/CD (GitHub Actions) detects the tag, builds the sdist and wheel, and publishes to PyPI.
-4. The built package contains a generated `src/llm_monitor/_version.py` with the exact version string.
-5. The application reads its own version at runtime via `importlib.metadata.version("llm-monitor")`.
+4. The built package contains a generated `src/clawmeter/_version.py` with the exact version string.
+5. The application reads its own version at runtime via `importlib.metadata.version("clawmeter")`.
 
 **Why not a `VERSION` file?**
 A standalone file creates a synchronisation problem: someone bumps the file but forgets to tag, or tags without updating the file. Git tags are the canonical release mechanism and should be the single source. The `hatch-vcs` plugin derives the version from the tag automatically, eliminating the possibility of mismatch.
@@ -2050,7 +2050,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | OQ-019 | **Should the `--insecure` flag be visible in `--help`?** Making it prominent encourages misuse. Alternatively, document it only in the man page and hide from `--help`. | Low | CLI UX | **Closed (D-018):** Permission checks are now warnings, not hard failures. The `--insecure` flag is no longer needed; `--quiet` suppresses the warning. |
 | OQ-020 | **Should history support downsampling for long-term storage?** Keep 5-minute samples for 7 days, hourly averages for 90 days, daily averages for 1 year. Reduces disk usage for long retention but adds schema and query complexity. Could be a v1.x feature. | Low | History | Open |
 | OQ-021 | **Should `--report` support chart output to terminal?** Rich can render basic bar charts. Alternatively, export to an HTML file with embedded charts. The sparkline in `--monitor` covers the basic case; full charts may be GTK v2 territory. | Low | History/Output | Open |
-| OQ-022 | **Should per-model breakdown be available as a `--report --models` flag or a separate `llm-monitor models` subcommand?** The flag approach keeps reporting unified; a subcommand could offer richer model-specific analysis (cost per model per day, model switching patterns). | Low | History/Models | **Closed (D-043):** `--report --models` flag. Keeps reporting unified; a dedicated subcommand can be added later if richer model analysis is needed. |
+| OQ-022 | **Should per-model breakdown be available as a `--report --models` flag or a separate `clawmeter models` subcommand?** The flag approach keeps reporting unified; a subcommand could offer richer model-specific analysis (cost per model per day, model switching patterns). | Low | History/Models | **Closed (D-043):** `--report --models` flag. Keeps reporting unified; a dedicated subcommand can be added later if richer model analysis is needed. |
 | OQ-023 | **Should the daemon expose a health endpoint?** A simple HTTP endpoint (e.g., `localhost:9847/health`) would enable container health checks (`HEALTHCHECK` in Dockerfile) and monitoring by external tools. Adds a dependency (or use stdlib `http.server`). Alternative: health via `daemon status` exit code only. | Medium | Daemon/Docker | Open |
 | OQ-024 | **Claude credentials in Docker: mount file or extract token to env var?** Mounting `~/.claude/.credentials.json:ro` is simpler but ties the container to a host path and Claude Code's file format. Extracting the OAuth token to an env var is more portable but requires manual refresh. | Medium | Docker/Claude | Open |
 | OQ-025 | **Should the Docker image be published to Docker Hub, GHCR, or both?** GHCR is free for public repos and integrates with GitHub Actions. Docker Hub has broader discoverability. | Low | Docker | Open |
@@ -2088,22 +2088,22 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-002 | **Pluggable provider architecture with abstract base class.** | Enables incremental delivery (Claude first, others later) without refactoring core. Third-party providers possible in future. | 2026-04-05 | Accepted |
 | D-003 | **JSON as default output mode (no flag required).** | Unix philosophy - default output is machine-parseable. Human-readable output is opt-in via `--now` or `--monitor`. | 2026-04-05 | Accepted |
 | D-004 | **Global poll interval (10m default) with per-provider override.** | Cloud usage data changes slowly; 10 minutes is sufficient for Claude, OpenAI, Grok, and avoids Claude's aggressive rate limiting. Local providers (Ollama, Local) override to 60s. A single `poll_interval` replaces the former `cache_ttl` + `refresh_interval` split. | 2026-04-06 | Accepted |
-| D-005 | **Claude extra usage spend available as alpha feature.** | The existing `/api/oauth/usage` endpoint returns an `extra_usage` object with `is_enabled`, `monthly_limit` (cents), `used_credits`, and `utilization` (0–100%). No scraping needed — just parse an additional field from the existing response. Gated behind `enable_alpha_features` (D-053) since the endpoint is undocumented. Values are in the user's billing currency (not necessarily USD), displayed using `"credits"` unit type. Graduates to stable when Anthropic documents the endpoint. See OQ-001. Tracked as [#19](https://github.com/danielithomas/llm-monitor/issues/19) for v0.7.1. | 2026-04-10 | Accepted |
+| D-005 | **Claude extra usage spend available as alpha feature.** | The existing `/api/oauth/usage` endpoint returns an `extra_usage` object with `is_enabled`, `monthly_limit` (cents), `used_credits`, and `utilization` (0–100%). No scraping needed — just parse an additional field from the existing response. Gated behind `enable_alpha_features` (D-053) since the endpoint is undocumented. Values are in the user's billing currency (not necessarily USD), displayed using `"credits"` unit type. Graduates to stable when Anthropic documents the endpoint. See OQ-001. Tracked as [#19](https://github.com/danielithomas/clawmeter/issues/19) for v0.7.1. | 2026-04-10 | Accepted |
 | D-006 | **Use `rich` for terminal output.** | Progress bars, tables, colour, Live display with minimal code. Widely used, well-maintained. | 2026-04-05 | Accepted |
-| D-007 | **Follow XDG Base Directory specification.** | Config in `~/.config/llm-monitor/`, cache in `~/.cache/llm-monitor/`. Standard Linux practice. | 2026-04-05 | Accepted |
+| D-007 | **Follow XDG Base Directory specification.** | Config in `~/.config/clawmeter/`, cache in `~/.cache/clawmeter/`. Standard Linux practice. | 2026-04-05 | Accepted |
 | D-008 | **Lightweight base install with additive extras.** | Base install includes cloud providers only (no compiled C extensions). `[local]` adds psutil/pynvml for GPU metrics. `[gtk]` adds PyGObject. `[all]` adds everything. Extras are additive, not subtractive — this is how pip extras actually work. | 2026-04-05 | Accepted |
 | D-009 | **Provider errors are isolated.** | A failure in Grok should not prevent Claude data from displaying. Each provider reports independently. Aggregate exit code reflects overall state. | 2026-04-05 | Accepted |
 | D-010 | **TOML for configuration with per-provider sections.** | Python stdlib support (3.11+), human-readable, natural nesting for provider-specific config. | 2026-04-05 | Accepted |
 | D-011 | **GTK4 + libadwaita targeted for v2.** | Modern GNOME path. KDE compatibility via SNI. Detailed approach under OQ-009. | 2026-04-05 | Proposed |
-| D-012 | **Project name: `llm-monitor`.** | Clear, generic, doesn't tie to a single provider. Short enough for CLI use. Available on PyPI (to be verified). | 2026-04-05 | Proposed |
+| D-012 | **Project name: `clawmeter`.** | Clear, generic, doesn't tie to a single provider. Short enough for CLI use. Available on PyPI (to be verified). | 2026-04-05 | Proposed |
 | D-013 | **Each provider keeps its native units.** | Claude reports percent, OpenAI reports USD, Ollama reports tokens/sec. Forcing normalisation would lose information. The `UsageWindow.unit` field makes the unit explicit. | 2026-04-05 | Accepted |
-| D-014 | **Rename from `claude-usage` to `llm-monitor`.** | Supports multi-provider roadmap from day one. Provider architecture baked into initial design rather than retrofitted. | 2026-04-05 | Accepted |
+| D-014 | **Rename from `claude-usage` to `clawmeter`.** | Supports multi-provider roadmap from day one. Provider architecture baked into initial design rather than retrofitted. | 2026-04-05 | Accepted |
 | D-015 | **Australian English spelling throughout codebase and documentation.** | Author preference. `utilisation` not `utilization`, `colour` not `color`, etc. Code identifiers use US English where Python convention requires it (e.g., `color` in Rich API calls). | 2026-04-05 | Accepted |
 | D-016 | **No plaintext API keys in config files.** | Credentials are resolved via system keyring, environment variables, or command helpers. The config schema does not include any field for storing key values directly. Config files on disk must never contain secrets. | 2026-04-05 | Accepted |
 | D-017 | **System keyring via Python `keyring` library as the preferred credential store.** | Integrates with GNOME Keyring (Secret Service D-Bus API), KDE Wallet, and KeePassXC. Cross-DE support on Linux. Falls back gracefully if no keyring daemon is running. | 2026-04-05 | Accepted |
 | D-018 | **Warn (not refuse) on config files with loose permissions.** | The config file contains no secrets by design (D-016), so a hard failure was disproportionate to the risk. Default umask creates files as 0644; every user would hit the error on first run. A visible warning on every invocation trains correct behaviour without blocking usage. Permission checks are skipped entirely in container environments. | 2026-04-06 | Accepted |
 | D-019 | **SecretStr wrapper type for all credentials in memory.** | Prevents accidental logging, serialisation, or display of secrets. `__repr__` and `__str__` return masked values. | 2026-04-05 | Accepted |
-| D-020 | **stdout for data, stderr for messaging, with no exceptions.** | Follows Unix convention and clig.dev guidelines. Enables clean piping: `llm-monitor \| jq` never sees warnings or spinners. | 2026-04-05 | Accepted |
+| D-020 | **stdout for data, stderr for messaging, with no exceptions.** | Follows Unix convention and clig.dev guidelines. Enables clean piping: `clawmeter \| jq` never sees warnings or spinners. | 2026-04-05 | Accepted |
 | D-021 | **SIGPIPE handled silently.** | Prevents tracebacks when piping to `head`, `grep -q`, etc. Standard Unix CLI behaviour. | 2026-04-05 | Accepted |
 | D-022 | **SIGHUP reloads configuration.** | Standard daemon/long-running process convention. Allows config changes without restarting monitor mode. | 2026-04-05 | Accepted |
 | D-023 | **No redirects on credential-bearing HTTP requests.** | Prevents accidental credential forwarding to unexpected hosts via HTTP 301/302. Defence in depth against open redirect vulnerabilities in upstream APIs. | 2026-04-05 | Accepted |
@@ -2115,7 +2115,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-029 | **90-day default retention with automatic pruning.** | Balances useful historical depth against disk usage. At typical polling rates, 90 days produces roughly 230K rows per 3-provider setup - well within SQLite's performance envelope. Configurable in `config.toml`. | 2026-04-06 | Accepted |
 | D-030 | **`history purge` requires explicit typed confirmation.** | Irreversible destructive operation. Interactive mode requires the user to type the word `purge` (case-sensitive). Non-interactive mode uses `--confirm`. | 2026-04-06 | Accepted |
 | D-031 | **Git-tag-driven versioning via `hatch-vcs`.** | Single source of truth. No standalone `VERSION` file. Tags drive CI/CD release to PyPI. Eliminates version mismatch between file and tag. | 2026-04-06 | Accepted |
-| D-032 | **Publish to PyPI as `llm-monitor`. Lightweight base, additive extras.** | Base install has no compiled C extensions (works in containers, CI, minimal environments). `[local]` adds psutil/pynvml for GPU metrics. `[gtk]` adds desktop frontend. `[all]` is the kitchen sink. | 2026-04-06 | Accepted |
+| D-032 | **Publish to PyPI as `clawmeter`. Lightweight base, additive extras.** | Base install has no compiled C extensions (works in containers, CI, minimal environments). `[local]` adds psutil/pynvml for GPU metrics. `[gtk]` adds desktop frontend. `[all]` is the kitchen sink. | 2026-04-06 | Accepted |
 | D-033 | **`uv` as the primary packaging and installation tool.** | Replaces `pipx`. Faster dependency resolution, native `uv tool install` for CLI apps, `uv build` for releases. Aligns with modern Python ecosystem direction. `pip install` remains supported as fallback. | 2026-04-06 | Accepted |
 | D-034 | **Ollama supports multiple network hosts.** | Local inference is not limited to localhost. Homelab and team setups commonly distribute models across machines. Simple form (`host = "..."`) for single host; array form (`[[providers.ollama.hosts]]`) for multi-host. Each host labelled and reported independently. | 2026-04-06 | Accepted |
 | D-035 | **Per-model usage breakdown as a first-class data model.** | `ModelUsage` dataclass captures per-model token counts, costs, and request counts. Stored in dedicated `model_usage` history table. Populated by providers that support it (OpenAI natively, Claude partially via Opus window, Grok via response headers). Enables "which model is costing me the most?" analysis. | 2026-04-06 | Accepted |
@@ -2126,13 +2126,13 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 | D-039 | **`key_command` failure is a hard error, not silent fallthrough.** | If the user explicitly configured a credential command, it failing should not silently fall through to an env var. This masks misconfiguration. The tool raises `CredentialError` and reports the failure clearly. | 2026-04-06 | Accepted |
 | D-040 | **`SecretStr.__repr__` never reveals any real characters.** | The previous design leaked the first 6 characters. For tokens with standard prefixes this is low-value, but it sets a bad precedent. `__repr__` now always returns `SecretStr('***')`. | 2026-04-06 | Accepted |
 | D-041 | **Exponential backoff on rate-limit (429) responses.** | Claude's 429s can persist for 30+ minutes. Without backoff state, the tool retries on every poll cycle and gets re-rate-limited. Backoff escalates exponentially (10m → 20m → 40m, cap 60m), is persisted in the cache file, and resets on success. | 2026-04-06 | Accepted |
-| D-042 | **Environment variable overrides for all XDG paths.** | `LLM_MONITOR_CONFIG`, `LLM_MONITOR_DATA_DIR`, `LLM_MONITOR_CACHE_DIR` override defaults. Essential for Docker (where XDG dirs may not exist) and for CI/test environments. | 2026-04-06 | Accepted |
+| D-042 | **Environment variable overrides for all XDG paths.** | `CLAWMETER_CONFIG`, `CLAWMETER_DATA_DIR`, `CLAWMETER_CACHE_DIR` override defaults. Essential for Docker (where XDG dirs may not exist) and for CI/test environments. | 2026-04-06 | Accepted |
 | D-043 | **Report aggregation: mean(utilisation), max-severity(status), last(counters), max(tokens/cost).** | Fields have different semantics: utilisation is a gauge (mean is correct), status is a severity level (worst-case matters), raw_value/raw_limit/resets_at are point-in-time state (last is authoritative), tokens/cost are running totals within a provider window (max captures the high-water mark without double-counting). Delta-based analysis deferred to v1.x. | 2026-04-07 | Accepted |
 | D-044 | **Export uses two logical record types with `type` discriminator.** | `usage_samples` and `model_usage` have different cardinality and schemas. Merging into one row with NULLs everywhere is messy. JSONL uses a `type` field per line (`usage_sample`, `model_usage`, `provider_extras`). CSV uses two sections with separate header rows (extras omitted — JSON blobs don't map to flat columns). SQL includes all tables. Export is always a complete dump with no filtering flags. | 2026-04-07 | Accepted |
 | D-045 | **`--compact` is a `--monitor`-only modifier, plain text, one line per provider.** | Format: `● <name>  <bar> <pct>%  resets <time>` where `●` is the health indicator dot (coloured). Bar width = 10 chars. No JSON variant in v0.4.0 — tmux polling uses `--now` piped through external formatting. Closes OQ-007 for v0.4.0 scope. | 2026-04-08 | Accepted |
 | D-046 | **Sparklines: 24 hourly data points, Unicode block characters, min-max linear mapping.** | Source: `aggregate_samples(granularity="hourly")` filtered to last 24h. Characters: `▁▂▃▄▅▆▇█` mapped linearly across the min-max range. Suppressed if fewer than 3 data points exist (not enough to be meaningful). One sparkline per usage window, displayed after the progress bar. | 2026-04-08 | Accepted |
 | D-047 | **`?` help overlay: Rich Panel with keybindings, dismissed on any keypress.** | A `rich.panel.Panel` centred in the display listing all keybindings (one per line), with a "Press any key to dismiss" footer. Replaces the main content in the Live display until a key is pressed. Minimal, no over-engineering. | 2026-04-08 | Accepted |
-| D-048 | **`j` dumps JSON snapshot to current working directory.** | Writes same schema as `llm-monitor` default output to `./llm-monitor-<YYYYMMDD-HHMMSS>.json`. A brief status message appears in the TUI footer for 3 seconds. On write failure (permissions), show error in footer instead. | 2026-04-08 | Accepted |
+| D-048 | **`j` dumps JSON snapshot to current working directory.** | Writes same schema as `clawmeter` default output to `./clawmeter-<YYYYMMDD-HHMMSS>.json`. A brief status message appears in the TUI footer for 3 seconds. On write failure (permissions), show error in footer instead. | 2026-04-08 | Accepted |
 | D-049 | **`--interval`/`-i` flag: integer seconds, default 30, minimum 5.** | Only meaningful with `--monitor` — controls UI refresh rate. Minimum 5 seconds prevents accidental API hammering in standalone mode. Values < 5 clamped to 5 with a stderr warning. | 2026-04-08 | Accepted |
 | D-050 | **Provider health indicator thresholds based on poll_interval multiples.** | Green `●` = data age ≤ 1× poll_interval (healthy). Yellow `●` = data age > 1× but ≤ 3× poll_interval (stale — daemon may have missed a cycle). Red `●` = data age > 3× poll_interval OR provider has errors. poll_interval read from config (default 600s, per-provider override respected). | 2026-04-08 | Accepted |
 | D-051 | **`--notify` deferred to v0.9.0. No flag added in v0.4.0.** | The spec's roadmap places notifications at v0.9.0. Adding a dead flag creates confusion. Desktop notification support arrives with the notification engine. | 2026-04-08 | Accepted |
@@ -2145,7 +2145,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 ### v0.1.0 - CLI MVP (Claude Provider, Standalone)
 
-**Goal:** `llm-monitor` and `llm-monitor --now` display current Claude usage.
+**Goal:** `clawmeter` and `clawmeter --now` display current Claude usage.
 
 **Core:**
 - [x] `pyproject.toml` with `hatchling` + `hatch-vcs` build backend
@@ -2154,7 +2154,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] Secure file I/O helpers (atomic write, secure mkdir, permission warning)
 - [x] Permission warning on config file (stderr, not hard failure)
 - [x] Config file loader (TOML) with permission warnings and env var overrides
-- [x] Environment variable overrides for paths (`LLM_MONITOR_CONFIG`, `LLM_MONITOR_DATA_DIR`, `LLM_MONITOR_CACHE_DIR`)
+- [x] Environment variable overrides for paths (`CLAWMETER_CONFIG`, `CLAWMETER_DATA_DIR`, `CLAWMETER_CACHE_DIR`)
 - [x] Provider base class and registry with `resolve_credential()` (hard fail on `key_command` error)
 - [x] `key_command` support with `shell=False` execution and timeout handling
 - [x] System keyring integration via `keyring` library
@@ -2179,17 +2179,17 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] GitHub Actions CI pipeline (test on push) — from day one, not deferred to v1.0.0
 - [x] `test_models.py` — SecretStr (repr never leaks, str always masked, bool, len), UsageWindow/ModelUsage/ProviderStatus construction and JSON serialisation
 - [x] `test_security.py` — sanitisation filter against all REDACTION_PATTERNS, secure_write creates 0o600 files atomically, secure_mkdir creates 0o700 dirs, permission check warns but continues
-- [x] `test_config.py` — TOML parsing, env var overrides (`LLM_MONITOR_CONFIG` etc.), default values for missing keys, malformed TOML error message, missing config file creates defaults
+- [x] `test_config.py` — TOML parsing, env var overrides (`CLAWMETER_CONFIG` etc.), default values for missing keys, malformed TOML error message, missing config file creates defaults
 - [x] `test_cache.py` — write/read round-trip, poll_interval TTL expiry, `--fresh` bypasses cache, `--clear-cache` deletes files, flock contention (concurrent reads), backoff state persistence and escalation
 - [x] `test_providers/test_base.py` — resolve_credential: key_command success returns SecretStr, key_command non-zero raises CredentialError, key_command timeout raises CredentialError, env var fallback, keyring fallback, no credential returns None, allowed_hosts validation
 - [x] `test_providers/test_claude.py` — credential file reading (valid, missing, expired token), usage response parsing (all three windows), null window handling (`seven_day_opus: null`), 429 returns cached data and enters backoff, 401 triggers credential re-read and retry, mocked HTTP via `respx`
 - [x] `test_formatters/test_json_fmt.py` — output matches documented JSON schema (Section 4.2.3), no secrets in output, timestamp format, cached flag and cache_age_seconds
 - [x] `test_formatters/test_table_fmt.py` — TTY output has colour/Unicode, non-TTY output is plain ASCII, `$NO_COLOR` disables colour, `$TERM=dumb` disables colour
 - [x] `test_cli.py` — exit codes for each scenario (0/1/2/3/4), `--provider` filtering, `--verbose` and `--quiet` mutual exclusion error, `--version` output, `--help` output, stdout contains only data (no warnings), stderr contains only messages (no data)
-- [x] End-to-end integration: `llm-monitor --provider claude` with mocked HTTP returns valid JSON to stdout; `llm-monitor --now --provider claude` returns table to stdout
+- [x] End-to-end integration: `clawmeter --provider claude` with mocked HTTP returns valid JSON to stdout; `clawmeter --now --provider claude` returns table to stdout
 
 **Documentation:**
-- [x] README.md — project description, installation (`uv tool install`, `pip install`, from source), prerequisites (Claude Code authenticated via `claude /login`), quick start (`llm-monitor`, `llm-monitor --now`), JSON output example, table output example, configuration file location and example, credential setup (keyring, env var, key_command), available CLI flags, exit codes, security model summary, license
+- [x] README.md — project description, installation (`uv tool install`, `pip install`, from source), prerequisites (Claude Code authenticated via `claude /login`), quick start (`clawmeter`, `clawmeter --now`), JSON output example, table output example, configuration file location and example, credential setup (keyring, env var, key_command), available CLI flags, exit codes, security model summary, license
 
 ### v0.2.0 - History + Reporting
 
@@ -2202,10 +2202,10 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] `[history]` config section (enabled, retention_days)
 - [x] `--no-history` flag
 - [x] Automatic retention pruning on startup
-- [x] `llm-monitor history purge` with typed confirmation and `--confirm`
-- [x] `llm-monitor history stats` summary command
-- [x] `llm-monitor --report` / `llm-monitor history report` (table, JSON, CSV formats)
-- [x] `llm-monitor history export` (sql, jsonl, csv)
+- [x] `clawmeter history purge` with typed confirmation and `--confirm`
+- [x] `clawmeter history stats` summary command
+- [x] `clawmeter --report` / `clawmeter history report` (table, JSON, CSV formats)
+- [x] `clawmeter history export` (sql, jsonl, csv)
 - [x] Report flags: `--days`, `--from`, `--to`, `--format`, `--granularity`, `--models`
 
 **Tests:**
@@ -2218,7 +2218,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] `test_history.py` — WAL mode enabled on new databases, concurrent read during write doesn't block
 
 **Documentation:**
-- [x] README.md update — add history section: `history stats`, `history purge`, `--report` usage with examples, `history export` formats, `--no-history` flag, `[history]` config section, data storage location (`~/.local/share/llm-monitor/history.db`)
+- [x] README.md update — add history section: `history stats`, `history purge`, `--report` usage with examples, `history export` formats, `--no-history` flag, `[history]` config section, data storage location (`~/.local/share/clawmeter/history.db`)
 
 ### v0.3.0 - Daemon + Docker
 
@@ -2243,7 +2243,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] CLI daemon detection: read from DB when daemon is running, fallback to standalone
 - [x] SIGHUP config reload in daemon
 - [x] Dockerfile and docker-compose.yml
-- [x] Container-aware mode (`$LLM_MONITOR_CONTAINER`): skip permission checks, skip keyring, disable notifications
+- [x] Container-aware mode (`$CLAWMETER_CONTAINER`): skip permission checks, skip keyring, disable notifications
 
 **Tests:**
 - [x] `test_daemon.py` — `daemon run` starts poll loop and writes to history DB after first tick (with mocked providers)
@@ -2257,8 +2257,8 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] `test_daemon.py` — SIGTERM triggers clean shutdown (flush pending writes, close DB, remove PID)
 - [x] `test_cli.py` additions — CLI detects running daemon via PID file and reads from DB instead of fetching
 - [x] `test_cli.py` additions — `--fresh` fetches directly even when daemon is running
-- [x] `test_config.py` additions — container-aware mode: permission checks skipped when `$LLM_MONITOR_CONTAINER=1`
-- [ ] Docker integration: build image, `docker run` starts daemon, `docker exec llm-monitor --now` returns data (optional, CI-permitting)
+- [x] `test_config.py` additions — container-aware mode: permission checks skipped when `$CLAWMETER_CONTAINER=1`
+- [ ] Docker integration: build image, `docker run` starts daemon, `docker exec clawmeter --now` returns data (optional, CI-permitting)
 
 **Documentation:**
 - [x] README.md update — add daemon section: `daemon start/stop/status/run` usage, systemd integration (`daemon install`), `[daemon]` config section, poll interval configuration. Add Docker section: Dockerfile usage, docker-compose.yml example, environment variable credentials, volume mount for history DB, container-aware mode
@@ -2298,7 +2298,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 **Implementation notes:**
 
 *New files:*
-- `src/llm_monitor/formatters/monitor_fmt.py` — Rich Live TUI renderer. Uses `rich.live.Live` with `Screen()` layout. Contains: `MonitorDisplay` class (manages layout, refresh, key handling), sparkline renderer, compact-line formatter, help overlay panel.
+- `src/clawmeter/formatters/monitor_fmt.py` — Rich Live TUI renderer. Uses `rich.live.Live` with `Screen()` layout. Contains: `MonitorDisplay` class (manages layout, refresh, key handling), sparkline renderer, compact-line formatter, help overlay panel.
 - `tests/formatters/test_monitor_fmt.py` — TUI formatter unit tests.
 
 *Modified files:*
@@ -2352,7 +2352,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 **Implementation notes:**
 
 *New files:*
-- `src/llm_monitor/providers/grok.py` — Grok provider. Uses Management API (`management-api.x.ai`) as primary data source. Implements `Provider` ABC. Dual credential resolution: `management_key_env`/`management_key_command` for Management API, standard `key_env`/`key_command` for Inference API (optional). Team ID from config `team_id` field or `$XAI_TEAM_ID` env var.
+- `src/clawmeter/providers/grok.py` — Grok provider. Uses Management API (`management-api.x.ai`) as primary data source. Implements `Provider` ABC. Dual credential resolution: `management_key_env`/`management_key_command` for Management API, standard `key_env`/`key_command` for Inference API (optional). Team ID from config `team_id` field or `$XAI_TEAM_ID` env var.
 - `tests/providers/test_grok.py` — Grok provider unit tests with respx-mocked HTTP.
 - `tests/fixtures/grok_invoice_preview.json` — sample invoice preview response.
 - `tests/fixtures/grok_spending_limits.json` — sample spending limits response.
@@ -2360,7 +2360,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - `tests/fixtures/grok_usage_analytics.json` — sample usage analytics response.
 
 *Modified files:*
-- `providers/__init__.py` — add `from llm_monitor.providers.grok import GrokProvider` import to trigger registration.
+- `providers/__init__.py` — add `from clawmeter.providers.grok import GrokProvider` import to trigger registration.
 - `config.py` — add `grok` section to `DEFAULT_CONFIG` with `enabled: False`, `team_id: ""`, `management_key_env: "XAI_MANAGEMENT_KEY"`.
 - `security.py` — add management key redaction pattern (if distinct from `xai-*` pattern).
 
@@ -2491,7 +2491,7 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [ ] `test_providers/test_local.py` — GPU metrics with mocked `pynvml` (utilisation, VRAM, temperature), multi-GPU indexing, CPU/RAM via mocked `psutil`, graceful degradation when no GPU detected, AMD fallback to `rocm-smi` subprocess (mocked), `gpu_backend = "auto"` detection logic
 
 **Documentation:**
-- [ ] README.md update — add Local System Metrics to supported providers list, `[local]` extra installation (`uv tool install "llm-monitor[local]"`), GPU/CPU/RAM monitoring explanation, multi-GPU support, NVIDIA vs AMD backend configuration
+- [ ] README.md update — add Local System Metrics to supported providers list, `[local]` extra installation (`uv tool install "clawmeter[local]"`), GPU/CPU/RAM monitoring explanation, multi-GPU support, NVIDIA vs AMD backend configuration
 
 ### v0.9.0 - Notifications and Polish
 
@@ -2510,8 +2510,8 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 ### v1.0.0 - Stable CLI Release
 
 - [ ] Comprehensive error handling across all providers
-- [ ] `llm-monitor config set-key --provider <name>` interactive key setup
-- [ ] `llm-monitor config check` validates permissions, keyring, and provider connectivity
+- [ ] `clawmeter config set-key --provider <name>` interactive key setup
+- [ ] `clawmeter config check` validates permissions, keyring, and provider connectivity
 - [ ] Security audit of credential flow (all providers)
 - [ ] Fuzz testing on credential sanitisation patterns (randomised strings against REDACTION_PATTERNS)
 - [ ] PyPI publication via `uv build` + GitHub Actions trusted publishing
@@ -2548,27 +2548,27 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 ### 15.1 Overview
 
-The daemon architecture (Section 4.2.7) maps naturally to a Docker container. The container runs `llm-monitor daemon run` in the foreground, polling providers on schedule and writing to a SQLite database in a mounted volume. The CLI can then be run on the host (reading the same database) or via `docker exec`.
+The daemon architecture (Section 4.2.7) maps naturally to a Docker container. The container runs `clawmeter daemon run` in the foreground, polling providers on schedule and writing to a SQLite database in a mounted volume. The CLI can then be run on the host (reading the same database) or via `docker exec`.
 
 ### 15.2 Dockerfile
 
 ```dockerfile
 FROM python:3.12-slim
 
-RUN pip install --no-cache-dir llm-monitor
+RUN pip install --no-cache-dir clawmeter
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash monitor
 USER monitor
 
 # Default data directory
-ENV LLM_MONITOR_DATA_DIR=/data
-ENV LLM_MONITOR_CACHE_DIR=/data/cache
-ENV LLM_MONITOR_CONTAINER=1
+ENV CLAWMETER_DATA_DIR=/data
+ENV CLAWMETER_CACHE_DIR=/data/cache
+ENV CLAWMETER_CONTAINER=1
 
 VOLUME /data
 
-ENTRYPOINT ["llm-monitor", "daemon", "run"]
+ENTRYPOINT ["clawmeter", "daemon", "run"]
 ```
 
 The base install (no `[local]` extra) is used — cloud providers only, no GPU/system metrics. This keeps the image small and avoids C extension compilation.
@@ -2577,13 +2577,13 @@ The base install (no `[local]` extra) is used — cloud providers only, no GPU/s
 
 ```yaml
 services:
-  llm-monitor:
+  clawmeter:
     build: .
-    # or: image: ghcr.io/<user>/llm-monitor:latest
+    # or: image: ghcr.io/<user>/clawmeter:latest
     restart: unless-stopped
     volumes:
-      - llm-monitor-data:/data
-      - ${HOME}/.config/llm-monitor/config.toml:/home/monitor/.config/llm-monitor/config.toml:ro
+      - clawmeter-data:/data
+      - ${HOME}/.config/clawmeter/config.toml:/home/monitor/.config/clawmeter/config.toml:ro
       # Mount Claude credentials read-only (if using Claude provider)
       - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
     environment:
@@ -2593,15 +2593,15 @@ services:
       - XAI_MANAGEMENT_KEY=${XAI_MANAGEMENT_KEY}
       - XAI_TEAM_ID=${XAI_TEAM_ID}
       # Override poll interval (optional)
-      # - LLM_MONITOR_POLL_INTERVAL=600
+      # - CLAWMETER_POLL_INTERVAL=600
 
 volumes:
-  llm-monitor-data:
+  clawmeter-data:
 ```
 
 ### 15.4 Container-Aware Behaviour
 
-When `$LLM_MONITOR_CONTAINER=1` is set (or `/.dockerenv` is detected):
+When `$CLAWMETER_CONTAINER=1` is set (or `/.dockerenv` is detected):
 
 - **Permission checks are skipped.** Volume mounts have their own UID/permission model; POSIX permission checks on mounted files are unreliable.
 - **Keyring is not attempted.** No D-Bus Secret Service daemon is available. Credential resolution skips tier 3 and does not log a warning about keyring unavailability.
@@ -2615,18 +2615,18 @@ The SQLite database is in the mounted volume. The host CLI can read it directly:
 
 ```bash
 # Point the host CLI at the container's database
-export LLM_MONITOR_DATA_DIR=/path/to/docker/volume
+export CLAWMETER_DATA_DIR=/path/to/docker/volume
 
 # Now standard CLI commands read from the daemon's database
-llm-monitor --now
-llm-monitor --report --days 7
+clawmeter --now
+clawmeter --report --days 7
 ```
 
 Alternatively, use `docker exec`:
 
 ```bash
-docker exec llm-monitor llm-monitor --now
-docker exec llm-monitor llm-monitor --report
+docker exec clawmeter clawmeter --now
+docker exec clawmeter clawmeter --report
 ```
 
 ### 15.6 Health Check
@@ -2635,7 +2635,7 @@ If a health endpoint is implemented (see OQ-023), the Dockerfile adds:
 
 ```dockerfile
 HEALTHCHECK --interval=60s --timeout=5s --retries=3 \
-    CMD ["llm-monitor", "daemon", "status", "--quiet"]
+    CMD ["clawmeter", "daemon", "status", "--quiet"]
 ```
 
 Without a health endpoint, `daemon status` exit code (0 = running, non-zero = not) serves as the health check.

@@ -17,8 +17,8 @@ from unittest.mock import AsyncMock, MagicMock, patch
 import pytest
 from click.testing import CliRunner
 
-from llm_monitor.cli import cli
-from llm_monitor.daemon import (
+from clawmeter.cli import cli
+from clawmeter.daemon import (
     DaemonRunner,
     is_daemon_running,
     read_pid_file,
@@ -27,8 +27,8 @@ from llm_monitor.daemon import (
     write_state,
     read_state,
 )
-from llm_monitor.history import HistoryStore
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.history import HistoryStore
+from clawmeter.models import ProviderStatus, UsageWindow
 
 
 # ---------------------------------------------------------------------------
@@ -111,8 +111,8 @@ class _MockProvider:
 
 def _setup_daemon_env(tmp_path: Path, monkeypatch) -> dict:
     """Set up env for daemon tests. Returns config dict."""
-    monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+    monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
 
     config = _make_config(tmp_path)
@@ -444,8 +444,8 @@ class TestDaemonCLI:
     def test_already_running_error(self, tmp_path, monkeypatch):
         """daemon start when already running -> error with existing PID."""
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
 
         # Write a config file
         config_path = tmp_path / "config.toml"
@@ -453,7 +453,7 @@ class TestDaemonCLI:
             f'[daemon]\npid_file = "{tmp_path}/daemon.pid"\n'
         )
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         # Write PID file with our own PID (so it appears "running")
         pid_path = tmp_path / "daemon.pid"
@@ -467,15 +467,15 @@ class TestDaemonCLI:
     def test_daemon_stop_not_running(self, tmp_path, monkeypatch):
         """daemon stop when not running prints message."""
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
 
         config_path = tmp_path / "config.toml"
         config_path.write_text(
             f'[daemon]\npid_file = "{tmp_path}/daemon.pid"\n'
         )
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         runner = CliRunner()
         result = runner.invoke(cli, ["daemon", "stop"])
@@ -484,15 +484,15 @@ class TestDaemonCLI:
     def test_daemon_status_stopped(self, tmp_path, monkeypatch):
         """daemon status reports stopped when no daemon running."""
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
 
         config_path = tmp_path / "config.toml"
         config_path.write_text(
             f'[daemon]\npid_file = "{tmp_path}/daemon.pid"\n'
         )
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         runner = CliRunner()
         result = runner.invoke(cli, ["daemon", "status"])
@@ -502,15 +502,15 @@ class TestDaemonCLI:
     def test_daemon_status_quiet(self, tmp_path, monkeypatch):
         """daemon status --quiet exits 1 when stopped (for health checks)."""
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
 
         config_path = tmp_path / "config.toml"
         config_path.write_text(
             f'[daemon]\npid_file = "{tmp_path}/daemon.pid"\n'
         )
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         runner = CliRunner()
         result = runner.invoke(cli, ["daemon", "status", "--quiet"])
@@ -520,21 +520,21 @@ class TestDaemonCLI:
     def test_daemon_status_running(self, tmp_path, monkeypatch):
         """daemon status reports running when daemon PID file exists with live PID."""
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
 
         config_path = tmp_path / "config.toml"
         config_path.write_text(
             f'[daemon]\npid_file = "{tmp_path}/daemon.pid"\n'
         )
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         # Write PID file with current PID and a state file
         pid_path = tmp_path / "daemon.pid"
         pid_path.write_text(str(os.getpid()))
 
-        state_path = tmp_path / "runtime" / "llm-monitor" / "daemon.state"
+        state_path = tmp_path / "runtime" / "clawmeter" / "daemon.state"
         state_path.parent.mkdir(parents=True, exist_ok=True)
         state = {
             "started_at": datetime.now(timezone.utc).isoformat(),
@@ -572,8 +572,8 @@ class TestDaemonDetection:
     def _setup(self, tmp_path, monkeypatch):
         """Set up env with a fake daemon PID and history data."""
         monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path / "runtime"))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(tmp_path / "cache"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(tmp_path / "cache"))
 
         config_path = tmp_path / "config.toml"
         config_path.write_text(
@@ -582,7 +582,7 @@ class TestDaemonDetection:
             f'credentials_path = ""\n'
         )
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         # Write PID file with current PID
         pid_path = tmp_path / "daemon.pid"

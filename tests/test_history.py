@@ -15,9 +15,9 @@ import pytest
 import respx
 from click.testing import CliRunner
 
-from llm_monitor.cli import cli
-from llm_monitor.history import HistoryStore, SCHEMA_VERSION
-from llm_monitor.models import ModelUsage, ProviderStatus, UsageWindow
+from clawmeter.cli import cli
+from clawmeter.history import HistoryStore, SCHEMA_VERSION
+from clawmeter.models import ModelUsage, ProviderStatus, UsageWindow
 
 
 # ---------------------------------------------------------------------------
@@ -483,7 +483,7 @@ class TestPurge:
     def test_purge_cli_confirm_flag(self, tmp_path, monkeypatch):
         """--confirm should bypass interactive prompt."""
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         # Pre-populate the DB
         with HistoryStore(db_path) as store:
@@ -497,12 +497,12 @@ class TestPurge:
     def test_purge_cli_wrong_input(self, tmp_path, monkeypatch):
         """Typing anything other than 'purge' should abort."""
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             store.record(_make_status())
 
-        monkeypatch.setattr("llm_monitor.cli._stdin_is_tty", lambda: True)
+        monkeypatch.setattr("clawmeter.cli._stdin_is_tty", lambda: True)
         monkeypatch.setattr("builtins.input", lambda prompt="": "yes")
 
         runner = CliRunner()
@@ -513,12 +513,12 @@ class TestPurge:
     def test_purge_cli_correct_input(self, tmp_path, monkeypatch):
         """Typing 'purge' should proceed."""
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             store.record(_make_status())
 
-        monkeypatch.setattr("llm_monitor.cli._stdin_is_tty", lambda: True)
+        monkeypatch.setattr("clawmeter.cli._stdin_is_tty", lambda: True)
         monkeypatch.setattr("builtins.input", lambda prompt="": "purge")
 
         runner = CliRunner()
@@ -529,12 +529,12 @@ class TestPurge:
     def test_purge_cli_non_tty_no_confirm(self, tmp_path, monkeypatch):
         """When stdin is not a TTY and --confirm is missing, should error."""
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             store.record(_make_status())
 
-        monkeypatch.setattr("llm_monitor.cli._stdin_is_tty", lambda: False)
+        monkeypatch.setattr("clawmeter.cli._stdin_is_tty", lambda: False)
 
         runner = CliRunner()
         result = runner.invoke(cli, ["history", "purge"])
@@ -570,7 +570,7 @@ class TestStats:
 
     def test_stats_cli(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             store.record(_make_status())
@@ -751,7 +751,8 @@ class TestReport:
 
     def test_report_json_format(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -769,7 +770,7 @@ class TestReport:
 
     def test_report_csv_format(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -788,7 +789,7 @@ class TestReport:
 
     def test_report_table_format_cli(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -804,7 +805,8 @@ class TestReport:
 
     def test_report_with_models(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -821,7 +823,7 @@ class TestReport:
         assert "model_usage" in data
 
     def test_report_empty_db(self, tmp_path, monkeypatch):
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         runner = CliRunner()
         result = runner.invoke(cli, ["history", "report", "--days", "7"])
@@ -831,7 +833,8 @@ class TestReport:
     def test_report_via_status_flag(self, tmp_path, monkeypatch):
         """--report on the default command should work like 'history report'."""
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -846,7 +849,7 @@ class TestReport:
 
     def test_report_granularity_choices(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             self._populate_db(store)
@@ -953,7 +956,7 @@ class TestExport:
 
     def test_export_cli_sql(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             self._populate_store(store)
@@ -965,7 +968,8 @@ class TestExport:
 
     def test_export_cli_jsonl(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(tmp_path / "config.toml"))
 
         with HistoryStore(db_path) as store:
             self._populate_store(store)
@@ -978,7 +982,7 @@ class TestExport:
 
     def test_export_cli_csv(self, tmp_path, monkeypatch):
         db_path = tmp_path / "data" / "history.db"
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         with HistoryStore(db_path) as store:
             self._populate_store(store)
@@ -1046,8 +1050,8 @@ class TestHistoryIntegration:
 
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(cache_dir))
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(cache_dir))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         creds_path = tmp_path / "claude" / ".credentials.json"
         creds_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1068,7 +1072,7 @@ class TestHistoryIntegration:
         )
         import os
         os.chmod(str(config_path), 0o600)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         return tmp_path
 

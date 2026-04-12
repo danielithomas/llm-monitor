@@ -1,8 +1,8 @@
-"""llm-monitor: Monitor LLM service usage across providers from the CLI."""
+"""clawmeter: Monitor LLM service usage across providers from the CLI."""
 
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("llm-monitor")
+    __version__ = version("clawmeter")
 except PackageNotFoundError:
     __version__ = "0.0.0.dev0"

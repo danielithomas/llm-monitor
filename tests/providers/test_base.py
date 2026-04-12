@@ -8,9 +8,9 @@ from unittest.mock import MagicMock, patch
 import httpx
 import pytest
 
-from llm_monitor.models import CredentialError, ProviderStatus, SecretStr
-from llm_monitor.providers import PROVIDERS, get_enabled_providers, register_provider
-from llm_monitor.providers.base import Provider
+from clawmeter.models import CredentialError, ProviderStatus, SecretStr
+from clawmeter.providers import PROVIDERS, get_enabled_providers, register_provider
+from clawmeter.providers.base import Provider
 
 
 # ---------------------------------------------------------------------------
@@ -131,8 +131,8 @@ class TestResolveCredential:
             result = provider.resolve_credential(config)
             assert isinstance(result, SecretStr)
             assert result.get_secret_value() == "keyring-secret-456"
-            mock_kr.get_password.assert_called_once_with(
-                "llm-monitor/test_provider", "api_key"
+            mock_kr.get_password.assert_any_call(
+                "clawmeter/test_provider", "api_key"
             )
 
     def test_no_credential(self, monkeypatch):

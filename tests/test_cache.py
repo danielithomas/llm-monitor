@@ -10,14 +10,14 @@ from pathlib import Path
 
 import pytest
 
-from llm_monitor.cache import (
+from clawmeter.cache import (
     ProviderCache,
     _datetime_to_iso,
     _dict_to_status,
     _iso_to_datetime,
     _status_to_dict,
 )
-from llm_monitor.models import ProviderStatus, UsageWindow
+from clawmeter.models import ProviderStatus, UsageWindow
 
 
 # ---------------------------------------------------------------------------

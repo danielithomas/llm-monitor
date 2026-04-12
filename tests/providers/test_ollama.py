@@ -9,8 +9,8 @@ import httpx
 import pytest
 import respx
 
-from llm_monitor.models import ProviderStatus
-from llm_monitor.providers.ollama import OllamaProvider
+from clawmeter.models import ProviderStatus
+from clawmeter.providers.ollama import OllamaProvider
 
 FIXTURES_DIR = Path(__file__).parent.parent / "fixtures"
 HOST_URL = "http://localhost:11434"
