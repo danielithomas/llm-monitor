@@ -10,8 +10,8 @@ services:
       - ${HOME}/.claude/.credentials.json:/home/monitor/.claude/.credentials.json:ro
     environment:
       # Cloud provider API keys (alternative to keyring)
-      - OPENAI_API_KEY=${OPENAI_API_KEY}
-      - XAI_API_KEY=${XAI_API_KEY}
+      - OPENAI_ADMIN_KEY=${OPENAI_ADMIN_KEY}
+      - XAI_MANAGEMENT_KEY=${XAI_MANAGEMENT_KEY}
       # Override poll interval (optional)
       # - CLAWMETER_POLL_INTERVAL=600
 

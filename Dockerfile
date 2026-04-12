@@ -1,9 +1,17 @@
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
-RUN pip install --no-cache-dir clawmeter
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
+COPY . /tmp/build
+RUN pip install --no-cache-dir build && python -m build --wheel /tmp/build -o /tmp/dist
+
+FROM python:3.12-slim
 
 # Create non-root user
 RUN useradd --create-home --shell /bin/bash monitor
+
+COPY --from=builder /tmp/dist/*.whl /tmp/
+RUN pip install --no-cache-dir /tmp/*.whl && rm -f /tmp/*.whl
+
 USER monitor
 
 # Default data directory

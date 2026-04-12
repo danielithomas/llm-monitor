@@ -2479,6 +2479,28 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 - [x] README.md alpha features section — update Claude extra usage description from "planned" to active, add setup instructions
 - [x] CHANGELOG.md entry
 
+### v0.7.2 - Rename to clawmeter
+
+- [x] Rename Python package from `llm_monitor` to `clawmeter` (`src/llm_monitor/` → `src/clawmeter/`)
+- [x] Rename environment variables from `LLM_MONITOR_*` to `CLAWMETER_*`
+- [x] Update all internal imports, config paths, CLI entry points, Docker config
+- [x] Add migration logic for existing `llm-monitor` config/cache/data directories
+- [x] Update all documentation (README, SPEC, CHANGELOG) for new name
+
+### v0.7.3 - Docker Compose Fixes
+
+Tracked as [#24](https://github.com/danielithomas/clawmeter/issues/24).
+
+- [ ] Fix incorrect environment variable names in `docker-compose.yml` (`OPENAI_API_KEY` → `OPENAI_ADMIN_KEY`, `XAI_API_KEY` → `XAI_MANAGEMENT_KEY`)
+- [ ] Fix container build issues
+
+### v0.7.4 - PyPI Deployment
+
+Tracked as [#25](https://github.com/danielithomas/clawmeter/issues/25).
+
+- [ ] Publish `clawmeter` package to PyPI
+- [ ] Verify `uv tool install clawmeter` and `pip install clawmeter` work from PyPI
+
 ### v0.8.0 - Local System Metrics Provider
 
 - [ ] NVIDIA GPU metrics via `pynvml`
