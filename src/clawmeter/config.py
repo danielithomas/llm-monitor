@@ -68,11 +68,11 @@ def get_config_path() -> Path:
     """Resolve the config file path using the standard resolution order.
 
     Resolution order:
-    1. ``$LLM_MONITOR_CONFIG`` environment variable
+    1. ``$CLAWMETER_CONFIG`` environment variable
     2. ``$XDG_CONFIG_HOME/clawmeter/config.toml``
     3. ``~/.config/clawmeter/config.toml``
     """
-    env_path = os.environ.get("LLM_MONITOR_CONFIG")
+    env_path = os.environ.get("CLAWMETER_CONFIG")
     if env_path:
         return Path(env_path)
 
@@ -87,11 +87,11 @@ def get_data_dir() -> Path:
     """Resolve the data directory (used for history DB).
 
     Resolution order:
-    1. ``$LLM_MONITOR_DATA_DIR``
+    1. ``$CLAWMETER_DATA_DIR``
     2. ``$XDG_DATA_HOME/clawmeter/``
     3. ``~/.local/share/clawmeter/``
     """
-    env_path = os.environ.get("LLM_MONITOR_DATA_DIR")
+    env_path = os.environ.get("CLAWMETER_DATA_DIR")
     if env_path:
         return Path(env_path)
 
@@ -155,11 +155,11 @@ def get_cache_dir() -> Path:
     """Resolve the cache directory.
 
     Resolution order:
-    1. ``$LLM_MONITOR_CACHE_DIR``
+    1. ``$CLAWMETER_CACHE_DIR``
     2. ``$XDG_CACHE_HOME/clawmeter/``
     3. ``~/.cache/clawmeter/``
     """
-    env_path = os.environ.get("LLM_MONITOR_CACHE_DIR")
+    env_path = os.environ.get("CLAWMETER_CACHE_DIR")
     if env_path:
         return Path(env_path)
 

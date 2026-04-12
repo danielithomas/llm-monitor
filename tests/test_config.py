@@ -32,10 +32,10 @@ FIXTURES_DIR = Path(__file__).parent / "fixtures"
 def _clean_config_env(monkeypatch: pytest.MonkeyPatch) -> None:
     """Remove all env vars that influence config path resolution."""
     for var in (
-        "LLM_MONITOR_CONFIG",
-        "LLM_MONITOR_DATA_DIR",
-        "LLM_MONITOR_CACHE_DIR",
-        "LLM_MONITOR_CONTAINER",
+        "CLAWMETER_CONFIG",
+        "CLAWMETER_DATA_DIR",
+        "CLAWMETER_CACHE_DIR",
+        "CLAWMETER_CONTAINER",
         "XDG_CONFIG_HOME",
         "XDG_DATA_HOME",
         "XDG_CACHE_HOME",
@@ -84,7 +84,7 @@ class TestDefaultConfig:
 class TestGetConfigPath:
     def test_env_var_overrides(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", "/custom/path/config.toml")
+        monkeypatch.setenv("CLAWMETER_CONFIG", "/custom/path/config.toml")
         assert get_config_path() == Path("/custom/path/config.toml")
 
     def test_xdg_config_home(self, monkeypatch):
@@ -99,7 +99,7 @@ class TestGetConfigPath:
 
     def test_env_var_takes_precedence_over_xdg(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", "/explicit/config.toml")
+        monkeypatch.setenv("CLAWMETER_CONFIG", "/explicit/config.toml")
         monkeypatch.setenv("XDG_CONFIG_HOME", "/xdg/config")
         assert get_config_path() == Path("/explicit/config.toml")
 
@@ -111,7 +111,7 @@ class TestGetConfigPath:
 class TestGetDataDir:
     def test_env_var_overrides(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", "/custom/data")
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", "/custom/data")
         assert get_data_dir() == Path("/custom/data")
 
     def test_xdg_data_home(self, monkeypatch):
@@ -132,7 +132,7 @@ class TestGetDataDir:
 class TestGetCacheDir:
     def test_env_var_overrides(self, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", "/custom/cache")
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", "/custom/cache")
         assert get_cache_dir() == Path("/custom/cache")
 
     def test_xdg_cache_home(self, monkeypatch):
@@ -217,7 +217,7 @@ class TestLoadConfigEnvVar:
         _clean_config_env(monkeypatch)
         config_file = tmp_path / "env_config.toml"
         config_file.write_text('[general]\npoll_interval = 120\n')
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_file))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_file))
         config = load_config()
         assert config["general"]["poll_interval"] == 120
 
@@ -227,7 +227,7 @@ class TestLoadConfigEnvVar:
         env_config.write_text('[general]\npoll_interval = 111\n')
         explicit_config = tmp_path / "explicit.toml"
         explicit_config.write_text('[general]\npoll_interval = 222\n')
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(env_config))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(env_config))
         config = load_config(str(explicit_config))
         assert config["general"]["poll_interval"] == 222
 
@@ -260,7 +260,7 @@ class TestLoadConfigPermissions:
     def test_loose_permissions_emit_warning(self, tmp_path, monkeypatch, capfd):
         """A config file with 0o644 should produce a warning on stderr."""
         _clean_config_env(monkeypatch)
-        monkeypatch.delenv("LLM_MONITOR_CONTAINER", raising=False)
+        monkeypatch.delenv("CLAWMETER_CONTAINER", raising=False)
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 600\n')
         config_file.chmod(0o644)
@@ -272,7 +272,7 @@ class TestLoadConfigPermissions:
     def test_secure_permissions_no_warning(self, tmp_path, monkeypatch, capfd):
         """A config file with 0o600 should not produce any warning."""
         _clean_config_env(monkeypatch)
-        monkeypatch.delenv("LLM_MONITOR_CONTAINER", raising=False)
+        monkeypatch.delenv("CLAWMETER_CONTAINER", raising=False)
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 600\n')
         config_file.chmod(0o600)
@@ -289,9 +289,9 @@ class TestLoadConfigContainerMode:
     def test_container_mode_skips_permission_warning(
         self, tmp_path, monkeypatch, capfd
     ):
-        """When $LLM_MONITOR_CONTAINER=1, no permission warning is emitted."""
+        """When $CLAWMETER_CONTAINER=1, no permission warning is emitted."""
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 600\n')
         config_file.chmod(0o644)
@@ -301,7 +301,7 @@ class TestLoadConfigContainerMode:
 
     def test_container_mode_still_loads_config(self, tmp_path, monkeypatch):
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
         config_file = tmp_path / "config.toml"
         config_file.write_text('[general]\npoll_interval = 42\n')
         config = load_config(str(config_file))
@@ -313,7 +313,7 @@ class TestLoadConfigContainerMode:
         from clawmeter.providers.base import Provider
 
         _clean_config_env(monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
 
         # Use a concrete test provider
         class _TestProvider(Provider):

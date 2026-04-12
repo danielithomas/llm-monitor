@@ -159,7 +159,7 @@ class DaemonRunner:
 
     def _setup_logging(self) -> None:
         """Configure logging for foreground or background mode."""
-        log_level_str = os.environ.get("LLM_MONITOR_LOG_LEVEL", "info").upper()
+        log_level_str = os.environ.get("CLAWMETER_LOG_LEVEL", "info").upper()
         log_level = getattr(logging, log_level_str, logging.INFO)
         fmt = logging.Formatter("%(asctime)s %(levelname)-8s %(message)s")
 

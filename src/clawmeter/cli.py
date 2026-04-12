@@ -36,7 +36,7 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
     Precedence (highest to lowest):
     1. --no-colour flag (always disables)
     2. $NO_COLOR env var (if set to any value, disables)
-    3. $LLM_MONITOR_NO_COLOR env var
+    3. $CLAWMETER_NO_COLOR env var
     4. $TERM=dumb (disables)
     5. TTY detection (auto)
     6. --colour=always (force enable even when piped)
@@ -45,7 +45,7 @@ def _resolve_colour(no_colour: bool, colour: str | None) -> bool:
         return False
     if os.environ.get("NO_COLOR") is not None:
         return False
-    if os.environ.get("LLM_MONITOR_NO_COLOR") is not None:
+    if os.environ.get("CLAWMETER_NO_COLOR") is not None:
         return False
     if os.environ.get("TERM") == "dumb":
         return False
@@ -1068,7 +1068,7 @@ Type=exec
 ExecStart={binary} daemon run
 Restart=on-failure
 RestartSec=30
-Environment=LLM_MONITOR_LOG_LEVEL=info
+Environment=CLAWMETER_LOG_LEVEL=info
 
 [Install]
 WantedBy=default.target

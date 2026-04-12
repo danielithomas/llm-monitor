@@ -58,7 +58,7 @@ def _setup_env(tmp_path: Path, monkeypatch) -> Path:
     # Cache dir
     cache_dir = tmp_path / "cache"
     cache_dir.mkdir()
-    monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(cache_dir))
+    monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(cache_dir))
 
     # Credentials
     creds_path = tmp_path / "claude" / ".credentials.json"
@@ -72,7 +72,7 @@ def _setup_env(tmp_path: Path, monkeypatch) -> Path:
         f'credentials_path = "{creds_path}"\n'
     )
     os.chmod(str(config_path), 0o600)
-    monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+    monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
     return creds_path
 
@@ -138,7 +138,7 @@ class TestClearCache:
     def test_clear_cache(self, tmp_path, monkeypatch):
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(cache_dir))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(cache_dir))
         # Create a dummy cache file
         provider_dir = cache_dir / "claude"
         provider_dir.mkdir()
@@ -314,7 +314,7 @@ class TestAuthFailure:
     def test_expired_token_exit_code_2(self, tmp_path, monkeypatch):
         cache_dir = tmp_path / "cache"
         cache_dir.mkdir()
-        monkeypatch.setenv("LLM_MONITOR_CACHE_DIR", str(cache_dir))
+        monkeypatch.setenv("CLAWMETER_CACHE_DIR", str(cache_dir))
 
         # Create expired credentials
         past = datetime.now(timezone.utc) - timedelta(hours=1)
@@ -327,7 +327,7 @@ class TestAuthFailure:
             f'enabled = true\n'
             f'credentials_path = "{creds_path}"\n'
         )
-        monkeypatch.setenv("LLM_MONITOR_CONFIG", str(config_path))
+        monkeypatch.setenv("CLAWMETER_CONFIG", str(config_path))
 
         runner = CliRunner()
         result = runner.invoke(cli, ["--provider", "claude", "--fresh"])
@@ -375,13 +375,13 @@ class TestResolveColour:
 
     def test_term_dumb_disables(self, monkeypatch):
         monkeypatch.delenv("NO_COLOR", raising=False)
-        monkeypatch.delenv("LLM_MONITOR_NO_COLOR", raising=False)
+        monkeypatch.delenv("CLAWMETER_NO_COLOR", raising=False)
         monkeypatch.setenv("TERM", "dumb")
         assert _resolve_colour(no_colour=False, colour=None) is False
 
     def test_colour_always_enables(self, monkeypatch):
         monkeypatch.delenv("NO_COLOR", raising=False)
-        monkeypatch.delenv("LLM_MONITOR_NO_COLOR", raising=False)
+        monkeypatch.delenv("CLAWMETER_NO_COLOR", raising=False)
         monkeypatch.delenv("TERM", raising=False)
         assert _resolve_colour(no_colour=False, colour="always") is True
 
@@ -580,7 +580,7 @@ class TestNoHistory:
     def test_no_history_accepted(self, tmp_path, monkeypatch):
         """--no-history is accepted without error."""
         _setup_env(tmp_path, monkeypatch)
-        monkeypatch.setenv("LLM_MONITOR_DATA_DIR", str(tmp_path / "data"))
+        monkeypatch.setenv("CLAWMETER_DATA_DIR", str(tmp_path / "data"))
 
         respx.get("https://api.anthropic.com/api/oauth/usage").respond(
             200, json=_usage_response()

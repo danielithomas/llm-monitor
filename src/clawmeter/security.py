@@ -97,10 +97,10 @@ def check_file_permissions(path: str) -> List[str]:
 def is_container_mode() -> bool:
     """Return ``True`` when running inside a container.
 
-    Checks the ``$LLM_MONITOR_CONTAINER`` environment variable (value ``1``)
+    Checks the ``$CLAWMETER_CONTAINER`` environment variable (value ``1``)
     and the presence of ``/.dockerenv``.
     """
-    if os.environ.get("LLM_MONITOR_CONTAINER") == "1":
+    if os.environ.get("CLAWMETER_CONTAINER") == "1":
         return True
     return os.path.exists("/.dockerenv")
 

@@ -221,11 +221,11 @@ class TestCheckFilePermissions:
 
 class TestIsContainerMode:
     def test_detects_env_var(self, monkeypatch):
-        monkeypatch.setenv("LLM_MONITOR_CONTAINER", "1")
+        monkeypatch.setenv("CLAWMETER_CONTAINER", "1")
         assert is_container_mode() is True
 
     def test_env_var_not_set(self, monkeypatch, tmp_path):
-        monkeypatch.delenv("LLM_MONITOR_CONTAINER", raising=False)
+        monkeypatch.delenv("CLAWMETER_CONTAINER", raising=False)
         # Also ensure /.dockerenv doesn't affect the test on non-container hosts
         # by patching os.path.exists for the dockerenv check.
         original_exists = os.path.exists
@@ -239,7 +239,7 @@ class TestIsContainerMode:
         assert is_container_mode() is False
 
     def test_detects_dockerenv_file(self, monkeypatch):
-        monkeypatch.delenv("LLM_MONITOR_CONTAINER", raising=False)
+        monkeypatch.delenv("CLAWMETER_CONTAINER", raising=False)
         original_exists = os.path.exists
 
         def fake_exists(path):
