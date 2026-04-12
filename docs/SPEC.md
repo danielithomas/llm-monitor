@@ -2491,8 +2491,8 @@ The JSON output schema (Section 4.2.3) and config file format (Section 4.6) are 
 
 Tracked as [#24](https://github.com/danielithomas/clawmeter/issues/24).
 
-- [ ] Fix incorrect environment variable names in `docker-compose.yml` (`OPENAI_API_KEY` → `OPENAI_ADMIN_KEY`, `XAI_API_KEY` → `XAI_MANAGEMENT_KEY`)
-- [ ] Fix container build issues
+- [x] Fix incorrect environment variable names in `docker-compose.yml` (`OPENAI_API_KEY` → `OPENAI_ADMIN_KEY`, `XAI_API_KEY` → `XAI_MANAGEMENT_KEY`)
+- [x] Fix container build issues
 
 ### v0.7.4 - PyPI Deployment
 
@@ -2500,9 +2500,9 @@ Tracked as [#25](https://github.com/danielithomas/clawmeter/issues/25).
 
 - [x] Add logo and PyPI/Python/licence badges to README.md
 - [x] Create `.github/workflows/publish.yml` — tag-triggered build and publish via trusted publishing
-- [ ] Configure PyPI trusted publisher (GitHub environment `pypi` + PyPI pending publisher)
-- [ ] Tag `v0.7.4` to trigger first PyPI release
-- [ ] Verify `uv tool install clawmeter` and `pip install clawmeter` work from PyPI
+- [x] Configure PyPI trusted publisher (GitHub environment `pypi` + PyPI pending publisher)
+- [x] Tag `v0.7.4` to trigger first PyPI release
+- [x] Verify `uv tool install clawmeter` and `pip install clawmeter` work from PyPI
 
 ### v0.8.0 - Local System Metrics Provider
 
